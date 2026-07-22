@@ -1,0 +1,92 @@
+MikeaOS/
+│
+├── boot/
+│   ├── bios/
+│   │   └── boot.asm
+│   │
+│   ├── efi/
+│   │   └── boot.c
+│   │
+│   └── loader/
+│       └── stage2.asm
+│
+├── kernel/
+│   │
+│   ├── kernel.c
+│   ├── kernel.h
+│   │
+│   ├── arch/
+│   │   └── x86_64/
+│   │       ├── entry.asm
+│   │       ├── cpu.c
+│   │       ├── gdt.c
+│   │       ├── idt.c
+│   │       └── paging.c
+│   │
+│   ├── memory/
+│   │   ├── heap.c
+│   │   └── memory.c
+│   │
+│   ├── drivers/
+│   │   ├── framebuffer.c
+│   │   ├── keyboard.c
+│   │   └── timer.c
+│   │
+│   ├── process/
+│   │   └── process.c
+│   │
+│   └── syscall/
+│       └── syscall.c
+│
+├── libc/
+│   ├── string.c
+│   ├── printf.c
+│   └── stdio.c
+│
+├── shell/
+│   └── msh.c
+│
+├── filesystem/
+│   ├── mkfs.c
+│   ├── file.c
+│   └── directory.c
+│
+├── gui/
+│   ├── desktop.c
+│   ├── window.c
+│   └── theme.c
+│
+├── apps/
+│   ├── terminal/
+│   ├── settings/
+│   └── files/
+│
+├── packages/
+│   └── mpm.c
+│
+├── mkx/
+│   ├── loader.c
+│   └── format.h
+│
+├── sdk/
+│
+├── tools/
+│   ├── mkfs_tool.c
+│   └── mkx_builder.c
+│
+├── assets/
+│   ├── wallpapers/
+│   ├── sounds/
+│   ├── fonts/
+│   └── icons/
+│
+├── scripts/
+│   └── build.sh
+│
+├── build/
+│
+├── Makefile
+│
+├── README.md
+│
+└── LICENSE
