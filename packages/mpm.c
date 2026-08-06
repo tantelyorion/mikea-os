@@ -6,12 +6,52 @@
 
 #include "database.h"
 
+#include "../security/user.h"
+
+#include "../security/permission.h"
+
 
 
 void console_write(
 const char* text
 );
 
+
+
+/*
+    ============================================================
+    CORRECTIF SECURITE (controle d'acces manquant)
+    ============================================================
+
+    mpm_install()/mpm_remove() ne verifiaient absolument aucune
+    permission avant d'installer ou de desinstaller un paquet --
+    contrairement a TOUTES les autres operations d'ecriture du
+    systeme (fichiers/repertoires dans filesystem/file.c et
+    directory.c, comptes utilisateur dans shell/commands.c), qui
+    exigent au minimum PERMISSION_WRITE. N'importe quel compte
+    connecte, meme sans la moindre permission accordee (voir
+    permission_init()), pouvait donc modifier l'etat du systeme
+    de paquets. On applique ici la meme regle que le reste du
+    systeme (current_user_can() : hors contexte utilisateur,
+    ex. pendant l'initialisation du noyau, on autorise ; sinon
+    on applique la table de permissions reelle).
+*/
+
+static int current_user_can(int permission)
+{
+
+user* u = user_get_current();
+
+if (u == 0)
+{
+
+return 1;
+
+}
+
+return check_permission((int)u->id, permission);
+
+}
 
 
 
@@ -52,6 +92,18 @@ char* package
 {
 
 
+if(!current_user_can(PERMISSION_WRITE))
+{
+
+console_write(
+"Permission denied: write permission required\n"
+);
+
+return;
+
+}
+
+
 console_write(
 "Installing package...\n"
 );
@@ -81,6 +133,18 @@ void mpm_remove(
 char* package
 )
 {
+
+
+if(!current_user_can(PERMISSION_WRITE))
+{
+
+console_write(
+"Permission denied: write permission required\n"
+);
+
+return;
+
+}
 
 
 console_write(

@@ -35,6 +35,20 @@ u32 size;
 void mkx_init();
 
 
+/*
+    Correctif (code non branche) : cette fonction (mkx/runtime.c)
+    etait definie mais n'apparaissait meme pas dans ce header --
+    aucun fichier ne pouvait donc l'appeler. Elle prepare
+    l'environnement d'execution des applications MKX (pour
+    l'instant un stub : voir mkx/runtime.c pour les etapes
+    futures -- appels systeme, isolation memoire...). On
+    l'appelle desormais depuis mkx_init(), comme le reste de
+    l'initialisation du module mkx.
+*/
+
+void mkx_runtime_start();
+
+
 
 int mkx_execute(
 mkx_header* program

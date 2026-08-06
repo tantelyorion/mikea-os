@@ -1,5 +1,9 @@
 #include "mkx.h"
 
+#include "../security/user.h"
+
+#include "../security/permission.h"
+
 
 
 void console_write(
@@ -8,10 +12,75 @@ const char* text
 
 
 
+/*
+    ============================================================
+    CORRECTIF SECURITE (faille de controle d'acces)
+    ============================================================
+
+    mkx_execute() ne verifiait absolument aucune permission avant
+    de sauter dans le programme charge -- alors que
+    security/permission.h definit precisement PERMISSION_EXEC
+    dans ce but, et que permission_init() ne l'accorde par
+    defaut qu'a root (id 1). useradd (shell/commands.c ->
+    security/user.c) accorde PERMISSION_READ | PERMISSION_WRITE
+    a tout nouveau compte, jamais PERMISSION_EXEC.
+
+    Consequence avant ce correctif : n'importe quel utilisateur
+    non-root, qui a donc le droit d'ecrire un fichier ("write",
+    voir filesystem/file.c::file_write(), protege seulement par
+    PERMISSION_WRITE), pouvait construire un en-tete MKX valide
+    dans ce fichier puis l'executer avec "run" (shell/commands.c
+    -> cmd_run() -> mkx_execute()) sans jamais posseder
+    PERMISSION_EXEC. Le code du fichier s'execute directement au
+    meme niveau de privilege que le noyau (voir sdk/mikea_sdk.h) :
+    c'etait donc une elevation de privileges complete, et
+    PERMISSION_EXEC n'etait en pratique jamais applique nulle
+    part dans le systeme.
+
+    Meme regle que filesystem/file.c/directory.c
+    (current_user_can()) : hors contexte utilisateur (aucune
+    connexion active, ex. pendant l'initialisation du noyau),
+    on autorise ; sinon on applique la table de permissions
+    reelle de l'utilisateur connecte.
+*/
+
+static int current_user_can(int permission)
+{
+
+user* u = user_get_current();
+
+if (u == 0)
+{
+
+return 1;
+
+}
+
+return check_permission((int)u->id, permission);
+
+}
+
+
+
 int mkx_execute(
 mkx_header* program
 )
 {
+
+
+if(!current_user_can(PERMISSION_EXEC))
+{
+
+
+console_write(
+"Permission denied: execute permission required\n"
+);
+
+
+return -1;
+
+
+}
 
 
 if(program->magic != MKX_MAGIC)

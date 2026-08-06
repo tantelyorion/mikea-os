@@ -119,7 +119,27 @@ void* mk_malloc(u32 size)
         HEAP_SIZE : avant ce correctif, mk_malloc()
         pouvait ecrire au-dela du tas sans jamais
         detecter le depassement.
+
+        Correctif securite complementaire : "size" est fourni
+        par l'appelant (u32) et "total" additionne dessus la
+        taille de l'en-tete. Avec une valeur de "size" proche
+        de UINT32_MAX (ex. 0xFFFFFFF0), l'addition debordait
+        silencieusement et "total" redevenait une petite
+        valeur : la verification "heap_pointer + total >
+        heap_end" ci-dessous passait alors a tort, et
+        mk_malloc() renvoyait un pointeur valide mais avec
+        beaucoup moins de memoire reellement reservee que ce
+        que l'appelant croit pouvoir utiliser -- un
+        depassement de tas des la premiere ecriture. On rejette
+        donc explicitement toute taille qui ne peut de toute
+        facon pas tenir dans le tas, avant meme de calculer
+        "total".
     */
+
+    if (size > HEAP_SIZE - sizeof(block_header))
+    {
+        return (void*)0;
+    }
 
     u32 total = (u32)sizeof(block_header) + size;
 
