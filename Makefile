@@ -17,11 +17,50 @@
 
 ASM = nasm
 
-CC = x86_64-elf-gcc
 
-LD = x86_64-elf-ld
+# Correctif (installation plus simple) : ce noyau cible x86_64,
+# la MEME architecture que la quasi-totalite des machines de
+# developpement actuelles (PC, WSL2, la plupart des VM). Sur un
+# hote x86_64, le gcc/ld/objcopy standard du systeme produit deja
+# du code et des objets ELF64 x86-64 -- exactement ce dont ce
+# projet a besoin -- sans qu'un compilateur croise "x86_64-elf-*"
+# (long et complexe a construire soi-meme, voir
+# tools/check_toolchain.sh) soit necessaire. -ffreestanding et
+# -fno-pie (deja dans C_FLAGS/LD_FLAGS ci-dessous) empechent de
+# toute facon toute dependance a la libc ou au chargeur dynamique
+# de l'hote.
+#
+# CC/LD/OBJCOPY restent personnalisables (ex. "make CC=x86_64-elf-gcc
+# LD=x86_64-elf-ld OBJCOPY=x86_64-elf-objcopy") pour qui compile
+# depuis un hote d'une autre architecture (ex. Apple Silicon/ARM) et
+# dispose donc d'un vrai compilateur croise.
 
-OBJCOPY = x86_64-elf-objcopy
+CC ?= gcc
+
+LD ?= ld
+
+OBJCOPY ?= objcopy
+
+
+# Correctif (compilation croisee sans outil dedie a installer) :
+# contrairement a GCC, Clang est un compilateur croise "nativement"
+# -- un seul binaire "clang" sait produire du code pour n'importe
+# quelle architecture cible via --target, sans avoir besoin d'etre
+# reconstruit specifiquement (voir la doc LLVM : "LLVM Cross-
+# Compiler"). Combine a "lld" (l'editeur de liens LLVM, qui
+# detecte automatiquement le format ELF64 x86-64 depuis les
+# fichiers objets fournis) et "llvm-objcopy" (memes options que le
+# objcopy GNU, dont "-O binary"), cela permet de compiler ce noyau
+# avec une installation LLVM/Clang standard, meme sur un hote qui
+# n'est PAS x86_64, sans jamais avoir a construire ou telecharger
+# un compilateur croise "x86_64-elf-gcc" dedie. TARGET_FLAG est
+# vide par defaut (inutile avec gcc/clang natif sur un hote deja
+# x86_64) ; a renseigner uniquement avec Clang sur un hote d'une
+# autre architecture, ex. :
+#   make CC=clang LD=ld.lld OBJCOPY=llvm-objcopy \
+#        TARGET_FLAG=--target=x86_64-elf
+
+TARGET_FLAG ?=
 
 
 
@@ -34,6 +73,7 @@ ASM_FLAGS = -f elf64
 
 
 C_FLAGS = \
+$(TARGET_FLAG) \
 -ffreestanding \
 -mno-red-zone \
 -mno-mmx \
@@ -69,7 +109,22 @@ BOOT = boot/bios
 KERNEL = kernel
 
 
-ISO = $(BUILD)/MikeaOS.iso
+
+# Correctif (piege VirtualBox) : ce fichier n'est PAS une
+# vraie image ISO9660/El Torito (pas de catalogue de
+# demarrage, pas de systeme de fichiers CD) -- c'est un
+# disque brut (secteur de boot + stage2 + noyau colles bout
+# a bout), fait pour etre branche comme un disque DUR (voir
+# la cible "run" plus bas : "-drive format=raw", jamais
+# "-cdrom"). L'ancien nom "MikeaOS.iso" laissait croire le
+# contraire : monter ce fichier dans un lecteur optique
+# virtuel (VirtualBox, reflexe naturel vu l'extension .iso)
+# echoue immediatement avec "no bootable medium found",
+# puisqu'il n'y a aucun catalogue El Torito a y trouver.
+# ".img" reflete la nature reelle du fichier.
+
+IMG = $(BUILD)/MikeaOS.img
+
 
 
 
@@ -123,7 +178,7 @@ KERNEL_BIN = $(BUILD)/kernel.bin
 # ------------------------------------------------------------
 
 
-all: clean dirs $(ISO)
+all: clean dirs $(IMG)
 
 
 
@@ -261,17 +316,17 @@ $(KERNEL_BIN): $(KERNEL_ELF)
 
 
 # ------------------------------------------------------------
-# Create ISO image
+# Create disk image (image disque brute, pas une vraie ISO9660)
 # ------------------------------------------------------------
 
 
-$(ISO): $(BOOT_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
+$(IMG): $(BOOT_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
 
 	cat \
 	$(BOOT_BIN) \
 	$(STAGE2_BIN) \
 	$(KERNEL_BIN) \
-	> $(ISO)
+	> $(IMG)
 
 
 
@@ -302,10 +357,10 @@ $(DISK_IMG):
 # ------------------------------------------------------------
 
 
-run: $(ISO) $(DISK_IMG)
+run: $(IMG) $(DISK_IMG)
 
 	qemu-system-x86_64 \
-	-drive format=raw,file=$(ISO) \
+	-drive format=raw,file=$(IMG) \
 	-drive format=raw,file=$(DISK_IMG)
 
 

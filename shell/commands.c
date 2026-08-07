@@ -158,6 +158,31 @@ return;
 
 
 /*
+    Correctif (compte fantome) : user_create() ne verifiait
+    jamais si le nom demande existait deja -- contrairement a
+    inode_create()/directory_create() (filesystem/), qui
+    refusent tous les deux un nom deja pris. Retaper deux fois
+    "useradd bob" par erreur creait donc silencieusement DEUX
+    comptes distincts portant le meme nom : user_login()/
+    user_find() ne trouvant jamais que le premier (ils
+    s'arretent au premier resultat), le second devenait un
+    compte fantome, invisible et impossible a administrer
+    (passwd/userdel le manqueraient aussi), qui occupe
+    definitivement une place dans la table (voir
+    security/user.h, user_slot_count()).
+*/
+
+if(user_find(username) != 0)
+{
+
+console_write("User already exists\n");
+
+return;
+
+}
+
+
+/*
     Correctif : le mot de passe etait auparavant lu comme un
     deuxieme mot sur la meme ligne de commande ("useradd bob
     secret"), donc affiche en clair a l'ecran (et potentiel-
@@ -825,7 +850,16 @@ return;
 
 mkx_header* program = (mkx_header*)content;
 
-mkx_execute(program);
+/*
+    Correctif stabilite : file_read() renvoie un pointeur
+    vers un tampon statique de MAX_FILE_SIZE octets
+    (filesystem/file.c, read_buffer) -- c'est cette taille
+    reelle qu'il faut transmettre a mkx_execute() pour qu'il
+    puisse rejeter un en-tete MKX qui declarerait un
+    programme plus grand que ce tampon (voir mkx/mkx.h).
+*/
+
+mkx_execute(program, MAX_FILE_SIZE);
 
 
 }

@@ -50,8 +50,27 @@ void mkx_runtime_start();
 
 
 
+/*
+    Correctif stabilite (saut hors tampon) : "entry" et "size"
+    viennent tous les deux de l'en-tete du fichier lui-meme,
+    donc entierement controlables par quiconque ecrit ce
+    fichier. mkx_execute() ne verifiait "entry" que par
+    rapport a "size" -- si "size" est declare artificiellement
+    grand (fichier corrompu ou malveillant), "entry" pouvait
+    alors depasser tres largement le tampon memoire reellement
+    alloue pour ce fichier (voir filesystem/file.h,
+    MAX_FILE_SIZE) sans que rien ne le detecte, et le
+    programme sautait executer de la memoire noyau arbitraire
+    -- plantage quasi certain, potentiellement pire.
+    "buffer_size" est desormais fourni par l'appelant (qui
+    connait la taille reelle du tampon d'ou vient "program",
+    ex. MAX_FILE_SIZE pour un fichier) et sert de limite
+    absolue, en plus de la coherence interne "entry" < "size".
+*/
+
 int mkx_execute(
-mkx_header* program
+mkx_header* program,
+u32 buffer_size
 );
 
 

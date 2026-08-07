@@ -17,6 +17,12 @@
 #include "../kernel/cpu/io.h"
 
 
+void console_write(
+const char* text
+);
+
+
+
 
 /*
 ====================================================
@@ -78,14 +84,44 @@ Makefile).
 
 
 
-static void ata_wait_ready()
+/*
+    Correctif stabilite (gel au demarrage) : cette boucle
+    n'avait AUCUNE limite. disk_init() l'appelle des le tout
+    debut du demarrage, avant meme l'ecran de connexion -- si
+    le disque esclave (build/disk.img, voir la note en tete de
+    fichier) n'est pas fourni comme second "-drive" a QEMU, ou
+    absent/mal branche sur une machine reelle, le bit BSY
+    pouvait ne jamais retomber a 0 et le systeme entier restait
+    fige en silence, ecran fixe, sans le moindre message.
+
+    ATA_TIMEOUT_ITERATIONS est une limite en nombre
+    d'iterations (pas en temps reel : on evite ainsi de
+    dependre d'une horloge deja initialisee), tres largement
+    suffisante pour un disque reel (pret en quelques
+    microsecondes) mais qui garantit que le noyau reprend
+    toujours la main. Renvoie 0 si pret, -1 en cas de timeout.
+*/
+
+#define ATA_TIMEOUT_ITERATIONS 100000
+
+
+static int ata_wait_ready()
 {
 
 /* Attend que le controleur ne soit plus occupe (bit BSY). */
 
-while (inb(ATA_STATUS) & ATA_STATUS_BSY)
+for (u32 tries = 0; tries < ATA_TIMEOUT_ITERATIONS; tries++)
 {
+
+if ((inb(ATA_STATUS) & ATA_STATUS_BSY) == 0)
+{
+return 0;
 }
+
+}
+
+
+return -1;
 
 }
 
@@ -94,9 +130,14 @@ while (inb(ATA_STATUS) & ATA_STATUS_BSY)
 static int ata_wait_data()
 {
 
-/* Attend que les donnees soient pretes (bit DRQ), ou une erreur. */
+/*
+    Attend que les donnees soient pretes (bit DRQ), ou une
+    erreur -- meme correctif de timeout que ata_wait_ready()
+    ci-dessus, pour la meme raison (eviter un gel indefini si
+    le disque ne repond jamais).
+*/
 
-while (1)
+for (u32 tries = 0; tries < ATA_TIMEOUT_ITERATIONS; tries++)
 {
 
 u8 status = inb(ATA_STATUS);
@@ -115,6 +156,9 @@ return 0;
 
 }
 
+
+return -1;
+
 }
 
 
@@ -122,7 +166,10 @@ return 0;
 static int ata_read_sector(u32 lba, u8* buffer)
 {
 
-ata_wait_ready();
+if (ata_wait_ready() != 0)
+{
+return -1;
+}
 
 
 outb(ATA_DRIVE_HEAD, (u8)(ATA_SLAVE_SELECT | ((lba >> 24) & 0x0F)));
@@ -165,7 +212,10 @@ return 0;
 static int ata_write_sector(u32 lba, const u8* buffer)
 {
 
-ata_wait_ready();
+if (ata_wait_ready() != 0)
+{
+return -1;
+}
 
 
 outb(ATA_DRIVE_HEAD, (u8)(ATA_SLAVE_SELECT | ((lba >> 24) & 0x0F)));
@@ -199,12 +249,17 @@ outw(ATA_DATA, word);
 
 /* Force l'ecriture reelle sur le disque (vide le cache du controleur). */
 
-ata_wait_ready();
+if (ata_wait_ready() != 0)
+{
+return -1;
+}
 
 outb(ATA_COMMAND, ATA_CMD_FLUSH);
 
-ata_wait_ready();
-
+if (ata_wait_ready() != 0)
+{
+return -1;
+}
 
 return 0;
 
@@ -220,9 +275,25 @@ void disk_init()
     RAM, un vrai disque garde son contenu entre deux demarrages
     (c'est justement le but). On se contente de s'assurer que
     le controleur est pret.
+
+    Correctif stabilite : si le disque ne repond pas (absent,
+    mal branche a QEMU...), on ne bloque plus indefiniment le
+    demarrage (voir ata_wait_ready() ci-dessus). On previent
+    clairement et on continue : le systeme demarre quand meme
+    jusqu'au shell, simplement sans persistance disque
+    fonctionnelle (chaque operation fichier echouera alors
+    proprement plutot que de figer la machine).
 */
 
-ata_wait_ready();
+if (ata_wait_ready() != 0)
+{
+
+console_write(
+"[disk] Aucune reponse du disque de donnees -- "
+"persistance desactivee pour cette session\n"
+);
+
+}
 
 }
 

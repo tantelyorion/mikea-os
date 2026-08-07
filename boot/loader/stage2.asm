@@ -17,6 +17,19 @@ cli
 mov [boot_drive], dl
 
 
+; Point de controle de diagnostic (correctif) : confirme que
+; stage2 a bien ete atteint et execute (mode reel, donc via
+; INT10h comme boot.asm). Si l'ecran s'arrete avant ce
+; message alors que boot.asm affichait deja "[2/2] Stage2
+; charge, saut...", le probleme vient du saut lui-meme
+; (jmp 0x0000:0x8000) ou de l'execution des tout premiers
+; octets de stage2.bin -- verifiez que le fichier .img n'a
+; pas ete tronque/corrompu lors de sa copie.
+
+mov si,msg_stage2_start
+call print_string_rm
+
+
 lgdt [gdt_descriptor]
 
 
@@ -72,6 +85,18 @@ int 0x13
 jc kernel_disk_error
 
 
+; Point de controle de diagnostic (correctif) : si l'ecran
+; s'arrete entre "[stage2] demarre" et ce message, le
+; blocage vient de la lecture disque du noyau elle-meme
+; (INT13h AH=0x42, dap_kernel plus bas) -- verifiez que
+; l'image .img (boot+stage2+noyau) fait bien au moins
+; 65+600 secteurs (33280+307200 octets), sinon la lecture
+; deborde de la taille reelle du fichier.
+
+mov si,msg_kernel_loaded
+call print_string_rm
+
+
 
 ; Mode protégé
 
@@ -92,6 +117,9 @@ kernel_disk_error:
 ; plutot que de sauter dans une zone memoire non initialisee,
 ; ce qui provoquerait un comportement totalement imprevisible.
 
+mov si,msg_kernel_disk_error
+call print_string_rm
+
 cli
 
 .khalt:
@@ -99,6 +127,53 @@ cli
 hlt
 
 jmp .khalt
+
+
+
+; ------------------------------------------------------------
+; Affichage texte en mode reel (16 bits), via BIOS INT10h --
+; utilisable uniquement avant le passage en mode protege plus
+; bas (les interruptions BIOS ne fonctionnent plus ensuite).
+; ------------------------------------------------------------
+
+print_string_rm:
+
+.next:
+
+lodsb
+
+cmp al,0
+
+je .done
+
+mov ah,0x0E
+
+int 0x10
+
+jmp .next
+
+.done:
+
+ret
+
+
+
+msg_stage2_start:
+
+db "[stage2] demarre",13,10
+db 0
+
+
+msg_kernel_loaded:
+
+db "[stage2] noyau charge, passage 32 bits...",13,10
+db 0
+
+
+msg_kernel_disk_error:
+
+db "[stage2] Erreur de lecture disque (noyau)",13,10
+db 0
 
 
 
@@ -138,6 +213,23 @@ mov ax,DATA32_SEL
 mov ds,ax
 mov ss,ax
 mov es,ax
+
+
+; Point de controle de diagnostic (correctif) : premiere
+; ecriture possible une fois en mode protege -- les
+; interruptions BIOS (int 0x10) ne fonctionnent plus ici, on
+; ecrit donc directement dans la memoire video VGA texte
+; (0xB8000), sur la ligne 5 pour ne pas ecraser les messages
+; deja affiches en mode reel plus haut sur l'ecran. Si rien
+; n'apparait sur cette ligne alors que "[stage2] noyau
+; charge..." s'affichait juste avant, le blocage vient du
+; saut "jmp CODE32_SEL:protected" ou de l'activation du mode
+; protege (mov cr0) elle-meme -- verifiez le contenu du GDT
+; (CODE32_SEL/DATA32_SEL).
+
+mov esi,msg_protected_ok
+mov edi,0xB8000 + (80*2*5)
+call print_vga32
 
 
 
@@ -204,8 +296,65 @@ or eax,1<<31
 mov cr0,eax
 
 
+; Point de controle de diagnostic (correctif) : juste apres
+; l'activation de la pagination (ligne 6). Si l'ecran
+; s'arrete entre "Mode protege OK" (ligne 5) et ce point,
+; le probleme vient de la copie du noyau (rep movsd) ou de
+; la configuration PAE/pagination/MSR EFER ci-dessus -- une
+; mauvaise entree de table de pages declenche typiquement un
+; triple fault (redemarrage immediat de la VM, ecran qui
+; "clignote" et recommence a "Booting from hard disk...").
+
+mov esi,msg_paging_ok
+mov edi,0xB8000 + (80*2*6)
+call print_vga32
+
 
 jmp CODE64_SEL:long_mode
+
+
+
+; ------------------------------------------------------------
+; Affichage texte en mode protege 32 bits, ecriture directe
+; dans la memoire video VGA (0xB8000) puisque les
+; interruptions BIOS ne sont plus utilisables ici.
+;   ESI = chaine terminee par 0
+;   EDI = adresse VGA de destination (0xB8000 + ligne*160)
+; ------------------------------------------------------------
+
+print_vga32:
+
+mov ah,0x0F
+
+.loop:
+
+lodsb
+
+cmp al,0
+
+je .done
+
+mov [edi],al
+mov [edi+1],ah
+
+add edi,2
+
+jmp .loop
+
+.done:
+
+ret
+
+
+
+msg_protected_ok:
+
+db "[stage2] Mode protege OK",0
+
+
+msg_paging_ok:
+
+db "[stage2] Pagination OK, passage 64 bits...",0
 
 
 
@@ -227,6 +376,39 @@ mov ds,ax
 mov ss,ax
 
 
+; Point de controle de diagnostic (correctif) : dernier point
+; avant de sauter dans le noyau C (ligne 7). Ecriture VGA
+; directe, comme en mode protege 32 bits juste avant (meme
+; principe, mais registres 64 bits). Si ce message s'affiche
+; mais que rien ne se passe ensuite (pas de "Default account"
+; ni d'ecran de connexion, voir kernel/kernel.c), le probleme
+; n'est PAS dans le demarrage bas niveau mais dans le noyau
+; C lui-meme -- verifiez que le noyau a bien ete recopie en
+; entier a 0x100000 (rep movsd plus haut) et que son point
+; d'entree _start (kernel/arch/x86_64/entry.asm) initialise
+; correctement la pile avant d'appeler kernel_start().
+
+mov rsi,msg_kernel_call
+mov rdi,0xB8000 + (80*2*7)
+mov ah,0x0F
+
+.print_loop:
+
+lodsb
+
+cmp al,0
+
+je .print_done
+
+mov [rdi],al
+mov [rdi+1],ah
+
+add rdi,2
+
+jmp .print_loop
+
+.print_done:
+
 
 ; Correctif : "extern _start" / "call _start" ne peut pas
 ; fonctionner ici (voir le commentaire plus haut) -- on saute
@@ -246,6 +428,12 @@ halt:
 hlt
 
 jmp halt
+
+
+
+msg_kernel_call:
+
+db "[stage2] Appel du noyau...",0
 
 
 

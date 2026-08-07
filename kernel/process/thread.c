@@ -45,6 +45,43 @@ static thread kernel_thread;
 void thread_trampoline()
 {
 
+/*
+    Correctif stabilite (course rare, clavier fige) :
+    context_switch() (context_switch.asm) ne sauvegarde/
+    restaure que les registres callee-saved (rbp, rbx,
+    r12-r15) -- jamais le registre RFLAGS et donc jamais le
+    bit IF (interruptions CPU). Seul un iretq restaure IF.
+
+    thread_trampoline() est atteint par un simple "ret" a la
+    fin du tout premier context_switch() vers un thread donne
+    (voir thread_create()), jamais par un iretq. Deux chemins
+    peuvent declencher ce premier switch :
+
+    1. L'appel cooperatif direct depuis scheduler_run()
+       (kernel/process/scheduler.c) : IF vaut deja 1 (irq_enable()
+       a ete appelee plus tot), et n'est pas touche par ce chemin
+       -- correct.
+
+    2. Une preemption par le timer (IRQ0) qui arriverait par pur
+       hasard de timing juste apres thread_create() et juste
+       avant que scheduler_run() n'appelle lui-meme thread_yield()
+       une premiere fois : dans ce cas le switch a lieu depuis
+       l'interieur de irq_handler(), atteint via une "interrupt
+       gate" (voir kernel/cpu/idt.c, GATE(...,0x8E)) qui a
+       automatiquement mis IF a 0 en entrant. Ce thread
+       demarrerait alors avec les interruptions desactivees
+       en permanence -- plus aucune frappe clavier (IRQ1) ni
+       aucune preemption ulterieure, un gel silencieux et
+       difficile a reproduire.
+
+    On force donc explicitement IF a 1 ici, au tout debut de
+    tout nouveau thread, quel que soit le chemin par lequel il
+    a ete lance. Sans effet si IF valait deja 1 (cas normal).
+*/
+
+asm volatile("sti");
+
+
 thread* self = running_thread;
 
 

@@ -63,7 +63,8 @@ return check_permission((int)u->id, permission);
 
 
 int mkx_execute(
-mkx_header* program
+mkx_header* program,
+u32 buffer_size
 )
 {
 
@@ -125,6 +126,30 @@ if(program->entry >= program->size)
 
 console_write(
 "Invalid MKX entry point\n"
+);
+
+
+return -1;
+
+
+}
+
+
+/*
+    Voir le correctif documente dans mkx.h : "size" (et donc
+    la coherence "entry" < "size" ci-dessus) vient du fichier
+    lui-meme et ne suffit pas a garantir que "entry" reste a
+    l'interieur du tampon memoire reellement alloue. On borne
+    ici explicitement "size" (et donc "entry", deja < "size")
+    par la taille reelle du tampon fournie par l'appelant.
+*/
+
+if(program->size > buffer_size)
+{
+
+
+console_write(
+"Invalid MKX size\n"
 );
 
 

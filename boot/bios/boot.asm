@@ -68,6 +68,13 @@ check_extensions:
     jne no_extensions
 
 
+    ; Point de controle de diagnostic (correctif) : si l'ecran
+    ; s'arrete avant ce point, le blocage vient de l'appel
+    ; INT13h AH=0x41 lui-meme (verification des extensions),
+    ; donc du BIOS/de l'emulation plutot que de notre code.
+    mov si,msg_ext_ok
+    call print_string
+
 
 load_stage2:
 
@@ -92,6 +99,18 @@ load_stage2:
     int 0x13
 
     jc disk_error
+
+
+    ; Point de controle de diagnostic (correctif) : si l'ecran
+    ; s'arrete entre "Extensions OK" et ce message, le
+    ; blocage vient de la lecture disque de stage2 elle-meme
+    ; (INT13h AH=0x42) -- verifiez que le premier "-drive"
+    ; QEMU pointe bien sur build/MikeaOS.img avec
+    ; "format=raw" (jamais "-cdrom"), ou que le fichier est
+    ; bien attache comme DISQUE DUR (pas lecteur optique)
+    ; dans VirtualBox.
+    mov si,msg_stage2_ok
+    call print_string
 
 
     jmp 0x0000:0x8000
@@ -183,6 +202,18 @@ msg:
 
 db "Mikea OS Bootloader",13,10
 db "Loading Kernel...",13,10
+db 0
+
+
+msg_ext_ok:
+
+db "[1/2] Extensions BIOS OK",13,10
+db 0
+
+
+msg_stage2_ok:
+
+db "[2/2] Stage2 charge, saut...",13,10
 db 0
 
 
