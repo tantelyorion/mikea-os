@@ -1,3 +1,3 @@
 #Mikea_OS
-Mikea OS is an Open Source Operating system 
+An Open Source Operating system 
 with AI integration
