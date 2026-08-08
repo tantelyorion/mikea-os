@@ -328,6 +328,26 @@ $(IMG): $(BOOT_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
 	$(KERNEL_BIN) \
 	> $(IMG)
 
+	# Correctif critique (lecture disque du noyau echoue) :
+	# boot.asm+stage2.asm+kernel.bin ne remplit ce fichier que
+	# jusqu'a sa taille exacte (en general a peine plus que
+	# 33280 + quelques dizaines de Ko), alors que dap_kernel
+	# (boot/loader/stage2.asm) demande TOUJOURS 600 secteurs
+	# (300 Ko) a partir du LBA 65, quelle que soit la taille
+	# reelle du noyau (marge volontairement large, voir le
+	# commentaire de dap_kernel). Sans ce correctif, ce fichier
+	# etait donc systematiquement plus court que ce que la
+	# lecture demande : QEMU/le BIOS refusent de lire au-dela
+	# de la fin reelle du fichier, INT13h AH=0x42 renvoie une
+	# erreur (drapeau carry), et stage2 affiche "Erreur de
+	# lecture disque (noyau)" avant de figer la machine -- le
+	# noyau n'etait jamais charge, meme quand la compilation
+	# reussissait parfaitement. On complete donc ce fichier a
+	# 1 Mo (tres largement au-dessus des 340480 octets requis,
+	# de quoi laisser une bonne marge de croissance au noyau).
+
+	truncate -s 1M $(IMG)
+
 
 
 # ------------------------------------------------------------
