@@ -74,6 +74,32 @@ out 0x92,al
 ; emplacement soit fixe quelle que soit la taille reelle du
 ; code de stage2). 600 secteurs (300 Ko) de marge sont lus,
 ; largement suffisant pour ce noyau.
+;
+; Correctif critique (echouait TOUJOURS, quelle que soit la
+; taille du fichier .img) : de tres nombreux BIOS -- dont
+; SeaBIOS, le firmware utilise par QEMU, la cible principale
+; de ce projet -- limitent CHAQUE appel INT13h AH=0x42 a 127
+; secteurs au maximum (voir la Disk Address Packet : le champ
+; "nombre de secteurs" fait 16 bits, mais la limite reelle
+; imposee par le BIOS lui-meme est bien plus basse). Demander
+; 600 secteurs en un seul appel echoue donc systematiquement
+; avec une erreur "parametre invalide" (drapeau carry), peu
+; importe que le fichier disque sous-jacent soit assez grand
+; ou non -- ce n'est pas une question de taille de fichier
+; mais de taille de CHAQUE requete individuelle.
+;
+; On decoupe donc la lecture en 6 appels de 100 secteurs
+; chacun (6*100 = 600, et 100 reste bien en dessous de la
+; limite de 127), en avancant a chaque iteration le LBA de
+; depart et le segment de destination (l'offset reste
+; toujours 0 : chaque bloc de 100 secteurs = 51200 octets =
+; 0xC800, qui tient entierement dans un segment 16 bits sans
+; le depasser, ce qui evite tout probleme de franchissement
+; de limite de segment).
+
+mov cx,6
+
+.read_kernel_chunk:
 
 mov si,dap_kernel
 
@@ -85,13 +111,22 @@ int 0x13
 jc kernel_disk_error
 
 
+add word [dap_kernel_seg],0xC80
+
+add dword [dap_kernel_lba],100
+
+
+dec cx
+
+jnz .read_kernel_chunk
+
+
 ; Point de controle de diagnostic (correctif) : si l'ecran
-; s'arrete entre "[stage2] demarre" et ce message, le
-; blocage vient de la lecture disque du noyau elle-meme
-; (INT13h AH=0x42, dap_kernel plus bas) -- verifiez que
-; l'image .img (boot+stage2+noyau) fait bien au moins
-; 65+600 secteurs (33280+307200 octets), sinon la lecture
-; deborde de la taille reelle du fichier.
+; s'arrete entre "[stage2] demarre" et ce message, la lecture
+; disque du noyau echoue encore -- voir le correctif documente
+; plus haut (limite de 127 secteurs par appel INT13h AH=0x42).
+; Verifiez aussi, au cas ou, que l'image .img fait bien au
+; moins 65+600 secteurs (33280+307200 octets).
 
 mov si,msg_kernel_loaded
 call print_string_rm
@@ -185,14 +220,28 @@ db 0
 ; ------------------------------------------------------------
 ; Disk Address Packet (DAP) pour la lecture LBA du noyau
 ; ------------------------------------------------------------
+;
+; "dw 100" (et non 600) : voir le correctif documente plus
+; haut, chaque appel INT13h AH=0x42 est limite a 127 secteurs
+; par la plupart des BIOS (dont SeaBIOS/QEMU) -- 100 par appel,
+; repete 6 fois par la boucle ci-dessus, reste bien en dessous
+; de cette limite. dap_kernel_seg et dap_kernel_lba sont
+; modifies directement en memoire a chaque iteration (ce ne
+; sont pas des constantes figees a l'assemblage).
 
 dap_kernel:
 
 db 0x10
 db 0
-dw 600
+dw 100
 dw 0x0000
+
+dap_kernel_seg:
+
 dw 0x1000
+
+dap_kernel_lba:
+
 dq 65
 
 

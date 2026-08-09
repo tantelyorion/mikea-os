@@ -85,6 +85,28 @@ return buffer_position > 0;
 
 
 
+/*
+    Correctif (identifiants toujours refuses au premier essai) :
+    rien ne videait le tampon circulaire avant que login_prompt()
+    (security/login.c) ne commence a lire le nom d'utilisateur.
+    Toute touche pressee pendant le demarrage (l'utilisateur tape
+    souvent au clavier par impatience pendant que les messages de
+    demarrage defilent) restait donc en attente dans ce tampon et
+    etait silencieusement consommee comme si elle faisait partie
+    du nom d'utilisateur ou du mot de passe reellement saisis
+    ensuite -- l'identifiant semblait alors toujours incorrect,
+    meme en tapant "root"/"mikea" correctement.
+*/
+
+void keyboard_flush()
+{
+
+buffer_position = 0;
+
+}
+
+
+
 char keyboard_getchar()
 {
 
