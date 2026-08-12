@@ -80,14 +80,14 @@ load_stage2:
 
     ; Charge stage2.bin par LBA : secteur logique 1 (le
     ; secteur logique 0 est ce secteur de demarrage
-    ; lui-meme), sur 64 secteurs (32 Ko), a l'adresse
+    ; lui-meme), sur 96 secteurs (48 Ko), a l'adresse
     ; 0x0000:0x8000.
     ;
     ; stage2.asm est complete (voir la fin de ce fichier
     ; -- pardon, de stage2.asm) jusqu'a occuper exactement
-    ; ces 64 secteurs quelle que soit la taille reelle de son
+    ; ces 96 secteurs quelle que soit la taille reelle de son
     ; code, afin que kernel.bin commence toujours a un
-    ; emplacement disque fixe et connu (LBA 65). C'est
+    ; emplacement disque fixe et connu (LBA 97). C'est
     ; stage2.asm qui se charge ensuite de lire kernel.bin --
     ; ce secteur de demarrage ne s'occupe que de stage2.
 
@@ -188,11 +188,21 @@ db 0
 ;   +6  segment du tampon destination
 ;   +8  secteur logique (LBA) de depart, sur 64 bits
 
+; Correctif (marge de taille) : 96 secteurs (48 Ko) au lieu de
+; 64 -- les tables de pages couvrent desormais 4 Go d'identity
+; mapping (voir stage2.asm) au lieu de 64 Mo, ce qui ne rentrait
+; plus confortablement dans les 32 Ko precedents. 96 reste tres
+; en dessous de la limite de 127 secteurs par appel INT13h
+; AH=0x42 (voir le correctif documente dans stage2.asm pour le
+; chargement du noyau, qui lui doit se decouper en plusieurs
+; appels a cause de cette meme limite -- stage2 tient ici en un
+; seul appel).
+
 dap_stage2:
 
 db 0x10
 db 0
-dw 64
+dw 96
 dw 0x8000
 dw 0x0000
 dq 1

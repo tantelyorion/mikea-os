@@ -106,7 +106,7 @@ return;
 gfx_ready = 1;
 
 
-console_write("[graphics] Pret (mode video pas encore active -- voir README)\n");
+console_write("[graphics] Mode graphique actif\n");
 
 
 }
@@ -411,5 +411,59 @@ void gfx_clear(gfx_color color)
 {
 
 gfx_fill_rect(0, 0, vbe_info->width, vbe_info->height, color);
+
+}
+
+
+void gfx_scroll_up(u32 pixel_rows, gfx_color bg)
+{
+
+
+if (!gfx_ready)
+{
+
+return;
+
+}
+
+
+if (pixel_rows >= vbe_info->height)
+{
+
+gfx_clear(bg);
+
+return;
+
+}
+
+
+u8* fb = (u8*)(u64)vbe_info->addr;
+
+u32 row_bytes = pixel_rows * vbe_info->pitch;
+
+u32 total_bytes = vbe_info->height * vbe_info->pitch;
+
+
+/*
+    Decalage brut memoire (plus rapide que gfx_put_pixel
+    pixel par pixel pour deplacer une zone entiere) : on
+    copie tout ce qui est en dessous de la bande "pixel_rows"
+    vers le haut, puis on efface la bande laissee libre en
+    bas. Copie octet par octet (pas de memmove disponible en
+    freestanding) mais en ordre croissant, sur une zone qui ne
+    se chevauche pas dans ce sens -- correct sans avoir besoin
+    d'une copie "a l'envers".
+*/
+
+for (u32 i = 0; i < total_bytes - row_bytes; i++)
+{
+
+fb[i] = fb[i + row_bytes];
+
+}
+
+
+gfx_fill_rect(0, vbe_info->height - pixel_rows, vbe_info->width, pixel_rows, bg);
+
 
 }

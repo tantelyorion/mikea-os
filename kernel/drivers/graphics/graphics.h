@@ -83,4 +83,15 @@ void gfx_draw_text(u32 x, u32 y, const char* text, gfx_color color, u32 scale);
 void gfx_clear(gfx_color color);
 
 
+/*
+    Fait defiler le framebuffer vers le haut de "pixel_rows"
+    lignes de pixels (la zone du haut est perdue), et vide la
+    bande laissee libre en bas avec "bg". Utilise par la
+    console graphique (kernel/console/console.c) quand le
+    curseur atteint le bas de l'ecran.
+*/
+
+void gfx_scroll_up(u32 pixel_rows, gfx_color bg);
+
+
 #endif

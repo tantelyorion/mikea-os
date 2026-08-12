@@ -18,8 +18,6 @@
 
 #include "../gui/gui.h"
 
-#include "../kernel/drivers/graphics/graphics.h"
-
 #include "../kernel/process/process.h"
 
 #include "../mkx/mkx.h"
@@ -32,9 +30,6 @@ void console_write(
 
 
 void console_clear();
-
-
-void keyboard_flush();
 
 
 void input_readline(
@@ -871,41 +866,6 @@ mkx_execute(program, MAX_FILE_SIZE);
 
 
 
-/*
-    Complement (message de demarrage introuvable) : le statut
-    VBE/graphique n'etait visible qu'une seule fois, tres tot au
-    demarrage (graphics_init(), voir kernel/kernel.c) -- avec le
-    nombre de messages de diagnostic desormais affiches avant
-    l'ecran de connexion, ce message defile hors de l'ecran
-    (VGA texte, sans historique de defilement) avant meme
-    d'etre lisible. Cette commande rend ce statut consultable a
-    tout moment, une fois connecte.
-*/
-
-static void cmd_gfxstatus()
-{
-
-
-if(gfx_available())
-{
-
-console_write("Graphique (VBE) : disponible\n");
-
-console_write("Mode video reel : PAS ENCORE ACTIVE (voir README)\n");
-
-}
-else
-{
-
-console_write("Graphique (VBE) : indisponible -- mode texte uniquement\n");
-
-}
-
-
-}
-
-
-
 static void cmd_gui()
 {
 
@@ -1031,21 +991,6 @@ gui_draw_text(13, 16, "Appuyez sur Entree pour revenir au shell...", 0x1F);
 char dummy[8];
 
 
-/*
-    Correctif (fenetre invisible) : meme cause que le bug de
-    connexion deja corrige dans security/login.c -- sans
-    vider le tampon clavier ici, une frappe deja en attente
-    (ex. restee de la saisie de la commande "gui" elle-meme)
-    etait immediatement consommee par input_readline()
-    ci-dessous, ce qui declenchait console_clear() a
-    l'instant meme ou la fenetre venait d'etre dessinee. Le
-    shell semblait alors "ne rien afficher du tout" alors que
-    la fenetre s'affichait bel et bien, juste effacee avant
-    d'etre visible.
-*/
-
-keyboard_flush();
-
 input_readline(dummy, sizeof(dummy));
 
 
@@ -1124,7 +1069,6 @@ console_write("cat <name>\n");
 console_write("rm <name>\n");
 console_write("ls\n");
 console_write("gui\n");
-console_write("gfxstatus\n");
 console_write("run <name>\n");
 
 
@@ -1332,14 +1276,6 @@ else if(mk_strcmp(command, "gui") == 0)
 {
 
 cmd_gui();
-
-}
-
-
-else if(mk_strcmp(command, "gfxstatus") == 0)
-{
-
-cmd_gfxstatus();
 
 }
 

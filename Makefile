@@ -331,9 +331,9 @@ $(IMG): $(BOOT_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
 	# Correctif critique (lecture disque du noyau echoue) :
 	# boot.asm+stage2.asm+kernel.bin ne remplit ce fichier que
 	# jusqu'a sa taille exacte (en general a peine plus que
-	# 33280 + quelques dizaines de Ko), alors que dap_kernel
+	# 49664 + quelques dizaines de Ko), alors que dap_kernel
 	# (boot/loader/stage2.asm) demande TOUJOURS 600 secteurs
-	# (300 Ko) a partir du LBA 65, quelle que soit la taille
+	# (300 Ko) a partir du LBA 97, quelle que soit la taille
 	# reelle du noyau (marge volontairement large, voir le
 	# commentaire de dap_kernel). Sans ce correctif, ce fichier
 	# etait donc systematiquement plus court que ce que la

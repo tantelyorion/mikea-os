@@ -46,9 +46,6 @@ void console_write(
 );
 
 
-void graphics_init();
-
-
 
 
 /*
@@ -258,18 +255,6 @@ fb_clear();
 
 
 console_init();
-
-
-/*
-    Correctif (etape 2 interface graphique) : detecte si le
-    pilote graphique en pixels (kernel/drivers/graphics) peut
-    s'initialiser a partir des informations VBE relevees par
-    stage2.asm. Ne change PAS le mode video actif -- affiche
-    seulement un message d'etat via la console texte actuelle.
-    Voir README, section "Interface graphique".
-*/
-
-graphics_init();
 
 
 

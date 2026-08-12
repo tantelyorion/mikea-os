@@ -148,12 +148,10 @@ sur le système.
 
 Le `gcc`/`clang` par défaut sur Windows produit du **PE** (format Windows),
 pas de l'**ELF** (format attendu par ce noyau). Il faut donc forcer la
-cible avec Clang. **Important** : `ld.lld` appelé directement échoue
-souvent sur Windows (`unknown argument: -T`) — il faut faire piloter
-l'édition de liens par `clang` lui-même via `-fuse-ld=lld` :
+cible avec Clang :
 
 ```bash
-make CC=clang LD="clang --target=x86_64-elf -fuse-ld=lld -nostdlib" LD_FLAGS="-Wl,-T,linker.ld -Wl,-z,max-page-size=0x1000" OBJCOPY=llvm-objcopy TARGET_FLAG=--target=x86_64-elf all
+make CC=clang LD=ld.lld OBJCOPY=llvm-objcopy TARGET_FLAG=--target=x86_64-elf all
 ```
 
 ### Avec un compilateur croisé dédié (`x86_64-elf-gcc`)
@@ -177,7 +175,7 @@ make CC=x86_64-elf-gcc LD=x86_64-elf-ld OBJCOPY=x86_64-elf-objcopy all
 ```bash
 make run
 # ou, si vous avez utilisé CC=clang plus haut, repassez les mêmes variables :
-make CC=clang LD="clang --target=x86_64-elf -fuse-ld=lld -nostdlib" LD_FLAGS="-Wl,-T,linker.ld -Wl,-z,max-page-size=0x1000" OBJCOPY=llvm-objcopy TARGET_FLAG=--target=x86_64-elf run
+make CC=clang LD=ld.lld OBJCOPY=llvm-objcopy TARGET_FLAG=--target=x86_64-elf run
 # ou directement :
 bash scripts/run.sh
 ```
@@ -216,9 +214,6 @@ login: root
 mot de passe: mikea
 ```
 
-> **État confirmé** : démarrage complet + connexion `root`/`mikea`
-> testés avec succès sous QEMU (Windows/MSYS2 MINGW64, Clang/lld).
-
 ## Diagnostiquer un problème de démarrage
 
 Le démarrage affiche des messages de contrôle à chaque étape critique,
@@ -231,7 +226,6 @@ Loading Kernel...
 [2/2] Stage2 charge, saut...          <- boot.asm : stage2.bin chargé, saut effectué
 [stage2] demarre                      <- stage2.asm atteint et exécuté
 [stage2] noyau charge, passage 32 bits...   <- kernel.bin chargé depuis le disque
-[stage2] VBE detecte (mode graphique disponible)   <- ou : VBE non disponible (mode texte conservé)
 [stage2] Mode protege OK              <- transition 32 bits réussie
 [stage2] Pagination OK, passage 64 bits...  <- PAE/pagination/long mode configurés
 [stage2] Appel du noyau...            <- saut vers _start (kernel/arch/x86_64/entry.asm)
@@ -254,15 +248,6 @@ Le dernier message affiché indique où chercher :
   ou plus de 127 secteurs demandés en un seul appel `INT13h AH=0x42`
   (la plupart des BIOS, dont SeaBIOS, refusent — voir le découpage en
   6 appels de 100 secteurs dans `stage2.asm`).
-- **S'arrête entre `[stage2] noyau charge...` et `VBE detecte`/`VBE non
-  disponible`** : la détection VESA/VBE (nouvelle, voir « Interface
-  graphique » plus bas) pose problème — signalez-le, c'est du code
-  récent non testé sur matériel réel.
-- **`VBE non disponible` s'affiche alors que vous attendiez des
-  graphismes** : normal pour l'instant — cette étape ne fait que
-  détecter, elle ne bascule jamais réellement l'affichage (voir la
-  section Interface graphique). Le mode texte continue de fonctionner
-  dans les deux cas.
 - **S'arrête entre `[stage2] noyau charge...` et `Mode protege OK`** :
   problème dans le GDT ou l'activation du mode protégé (`mov cr0`).
 - **S'arrête entre `Mode protege OK` et `Pagination OK`** : la copie du
@@ -290,51 +275,11 @@ description de chaque commande.
 | Symptôme | Cause probable |
 |---|---|
 | `x86_64-elf-gcc: No such file or directory` | Compilateur croisé absent — utilisez `CC=gcc` (hôte x86_64) ou `CC=clang ... TARGET_FLAG=--target=x86_64-elf`. |
-| `lld: error: unknown argument: -T` (Windows) | `ld.lld` appelé directement ne se comporte pas en éditeur de liens GNU/ELF sur Windows — pilotez le lien via `clang -fuse-ld=lld` (voir la commande de compilation Windows plus haut : `LD="clang --target=x86_64-elf -fuse-ld=lld -nostdlib"` et `LD_FLAGS="-Wl,-T,linker.ld -Wl,-z,max-page-size=0x1000"`). |
 | VirtualBox : *"no bootable medium found"* | `MikeaOS.img` monté comme DVD au lieu de disque dur — voir [VirtualBox](#virtualbox) plus haut. |
 | QEMU bloqué sur `Loading kernel....` sans aucun message `[1/2]` | Le fichier `.img` n'est probablement pas attaché en `format=raw`, ou provient d'une build incomplète — relancez `make clean && make all`. |
 | `[stage2] Erreur de lecture disque (noyau)` malgré un fichier `.img` de 1 Mo | Assurez-vous d'utiliser la version du dépôt avec le découpage en 6×100 secteurs (voir ce README, section diagnostic) — c'était le second bug, indépendant de la taille du fichier. |
 | Le clavier semble se figer après quelques secondes d'utilisation | Bug corrigé (course rare sur le drapeau IF, voir `kernel/process/thread.c`) — vérifiez que vous utilisez bien la version corrigée. |
 | `root`/`mikea` refusés à l'écran de connexion (« Login incorrect » en boucle) | Bug corrigé : le tampon clavier n'était jamais vidé avant l'écran de connexion — une touche pressée pendant le démarrage (ou lors d'un essai précédent raté) polluait la saisie suivante. Voir `kernel/drivers/keyboard/keyboard.c` (`keyboard_flush()`). Évitez aussi de taper avant que `Mikea OS login:` ne soit affiché. |
-
-## Interface graphique (en cours)
-
-Un chantier est en cours pour passer du mode texte VGA à une véritable
-interface graphique en pixels (VESA/VBE), dans le style sobre d'un
-écran d'ordinateur de vaisseau spatial (pas de "neon" — futuriste et
-minimaliste). Avancement :
-
-- ✅ **Étape 1 — Détection VBE** (`boot/loader/stage2.asm`) : vérifie
-  que le BIOS supporte VESA/VBE 2.0+, cherche un mode graphique linéaire
-  en couleur directe (24 bits ou plus, résolution entre 640 et 1280 de
-  large) et enregistre ses caractéristiques (adresse physique du
-  framebuffer, largeur/hauteur/profondeur, position des canaux
-  rouge/vert/bleu) dans un tampon fixe (adresse physique `0x7E00`) pour
-  que le noyau C puisse les lire. **Cette étape ne change PAS le mode
-  vidéo réel** — l'écran continue de fonctionner en mode texte BIOS
-  classique dans tous les cas, pour ne prendre aucun risque sur ce qui
-  fonctionne déjà (démarrage, connexion, shell).
-- ✅ **Pilote graphique C** (`kernel/drivers/graphics/`) : lit ces
-  informations, expose `gfx_put_pixel`/`gfx_fill_rect`/`gfx_draw_rect`/
-  `gfx_draw_text` etc. Police bitmap 8×8 intégrée
-  (`assets/fonts/font8x8_basic.h`, domaine public,
-  [dhepper/font8x8](https://github.com/dhepper/font8x8)). `graphics_init()`
-  affiche seulement un message d'état au démarrage (`[graphics] ...`) —
-  **aucun pixel ne s'affiche encore**, tant que le mode vidéo réel n'est
-  pas basculé (voir étape suivante).
-- ⏳ **Étape 2 — Bascule réelle vers le mode graphique** : nécessite
-  d'abord un afficheur de texte sur pixels ("console" graphique côté
-  noyau C, remplaçant `console.c`) pour prendre le relais du mode texte
-  sans écran noir entre les deux — pas encore fait.
-- ⏳ **Étape 3 — Habillage visuel** (polices, couleurs, disposition).
-- ⏳ **Étape 4 — Assistant graphique d'installation.**
-
-Pourquoi cette prudence : une fois le mode vidéo réellement changé, le
-tampon texte `0xB8000` (utilisé par tout l'affichage actuel : messages
-de démarrage, écran de connexion, shell) cesse instantanément de
-s'afficher, puisque la carte vidéo n'est plus en mode texte. Basculer
-avant d'avoir un remplaçant graphique fonctionnel donnerait un écran
-noir sans aucun moyen de se connecter.
 
 ## Pistes d'amélioration
 
