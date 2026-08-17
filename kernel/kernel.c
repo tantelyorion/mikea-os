@@ -46,6 +46,9 @@ void console_write(
 );
 
 
+void graphics_init();
+
+
 
 
 /*
@@ -109,6 +112,9 @@ void timer_init();
 
 
 void keyboard_init();
+
+
+void mouse_init();
 
 
 void pci_init();
@@ -254,6 +260,22 @@ DISPLAY INITIALIZATION
 fb_clear();
 
 
+/*
+    Correctif (ordre d'initialisation) : graphics_init() doit
+    s'executer AVANT console_init(). console_init() efface
+    l'ecran des son premier appel en fonction de
+    gfx_available() (voir kernel/console/console.c) -- si
+    graphics_init() n'a pas encore tourne, gfx_available()
+    renvoie encore faux a ce moment-la meme si stage2.asm a
+    reellement active le mode graphique, et console_init()
+    efface alors via l'ancien chemin texte (sans effet visible
+    une fois en mode graphique), laissant le contenu residuel
+    de la memoire video affiche jusqu'au prochain texte ecrit.
+*/
+
+graphics_init();
+
+
 console_init();
 
 
@@ -312,6 +334,18 @@ timer_init();
 
 
 keyboard_init();
+
+
+/*
+    Correctif (etape 3 interface graphique) : pilote souris
+    PS/2 (kernel/drivers/mouse). Independant de VBE/graphics_init
+    -- s'initialise que le mode graphique soit actif ou non
+    (utile pour de futures commandes de diagnostic meme en mode
+    texte), mais la position n'est bornee a l'ecran que si un
+    mode graphique est actif (voir mouse.c).
+*/
+
+mouse_init();
 
 
 pci_init();

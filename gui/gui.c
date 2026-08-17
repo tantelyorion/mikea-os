@@ -23,7 +23,7 @@
 
 #define GUI_GFX_FG GFX_CYAN
 
-#define GUI_GFX_BG GFX_DARKBLUE
+#define GUI_GFX_BG 0x1B3A5C
 
 #define GUI_GFX_TITLE_FG GFX_WHITE
 
@@ -98,6 +98,13 @@ gfx_fill_rect(px, py, pw, ph, GUI_GFX_BG);
 
 gfx_draw_rect(px, py, pw, ph, GUI_GFX_FG);
 
+if (pw > 2 && ph > 2)
+{
+
+gfx_draw_rect(px + 1, py + 1, pw - 2, ph - 2, GUI_GFX_FG);
+
+}
+
 
 return;
 
@@ -150,7 +157,7 @@ fb_put(x + i, y + j, ' ', color);
 
 
 
-void gui_draw_window(int x, int y, int width, int height, const char* title, u8 color)
+void gui_draw_window(int x, int y, int width, int height, const char* title, u8 color, u32* bx, u32* by, u32* bsize)
 {
 
 gui_draw_box(x, y, width, height, color);
@@ -176,6 +183,31 @@ if (title != (void*)0)
 gfx_draw_text(px + 8 * GFX_SCALE, py, title, GUI_GFX_TITLE_FG, GFX_SCALE);
 
 }
+
+
+/*
+    Bouton de fermeture ('X') : carre dans le coin superieur
+    droit de la barre de titre. Dessine en dernier pour
+    rester au-dessus du reste de la barre de titre.
+*/
+
+u32 button_size = 8 * GFX_SCALE;
+
+u32 button_x = px + pw - button_size;
+
+u32 button_y = py;
+
+
+gfx_fill_rect(button_x, button_y, button_size, button_size, 0xB33A3A);
+
+gfx_draw_text(button_x, button_y, "X", GFX_WHITE, GFX_SCALE);
+
+
+if (bx != (void*)0) { *bx = button_x; }
+
+if (by != (void*)0) { *by = button_y; }
+
+if (bsize != (void*)0) { *bsize = button_size; }
 
 
 return;
@@ -217,5 +249,64 @@ i++;
 }
 
 }
+
+}
+
+
+
+void gui_draw_cursor(s32 x, s32 y)
+{
+
+if (!gfx_available())
+{
+
+return;
+
+}
+
+
+if (x < 0 || y < 0)
+{
+
+return;
+
+}
+
+
+/*
+    Petit curseur en forme de fleche simplifiee (triangle
+    plein), plus reconnaissable qu'un simple carre. Dessine
+    ligne par ligne, chaque ligne plus etroite que la
+    precedente.
+*/
+
+gfx_color c = GFX_WHITE;
+
+for (u32 row = 0; row < 10; row++)
+{
+
+gfx_fill_rect((u32)x, (u32)y + row, 10 - row, 1, c);
+
+}
+
+}
+
+
+
+int gui_point_in_button(u32 bx, u32 by, u32 bsize, s32 px, s32 py)
+{
+
+if (px < 0 || py < 0)
+{
+
+return 0;
+
+}
+
+u32 x = (u32)px;
+
+u32 y = (u32)py;
+
+return (x >= bx && x < bx + bsize && y >= by && y < by + bsize);
 
 }

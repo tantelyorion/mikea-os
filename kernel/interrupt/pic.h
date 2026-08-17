@@ -30,4 +30,13 @@ void pic_remap();
 void pic_send_eoi(u8 irq);
 
 
+/*
+    Demasque une IRQ materielle precise (0-15), independamment
+    du masque herite du BIOS. Voir le commentaire de
+    l'implementation (kernel/interrupt/pic.c).
+*/
+
+void pic_unmask_irq(u8 irq);
+
+
 #endif

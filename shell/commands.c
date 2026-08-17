@@ -18,6 +18,10 @@
 
 #include "../gui/gui.h"
 
+#include "../kernel/drivers/graphics/graphics.h"
+
+#include "../kernel/drivers/mouse/mouse.h"
+
 #include "../kernel/process/process.h"
 
 #include "../mkx/mkx.h"
@@ -30,6 +34,17 @@ void console_write(
 
 
 void console_clear();
+
+
+void keyboard_flush();
+
+
+int keyboard_available();
+
+char keyboard_getchar();
+
+
+unsigned long timer_ticks();
 
 
 void input_readline(
@@ -866,33 +881,191 @@ mkx_execute(program, MAX_FILE_SIZE);
 
 
 
-static void cmd_gui()
+/*
+    Complement (message de demarrage introuvable) : le statut
+    VBE/graphique n'etait visible qu'une seule fois, tres tot au
+    demarrage (graphics_init(), voir kernel/kernel.c) -- avec le
+    nombre de messages de diagnostic desormais affiches avant
+    l'ecran de connexion, ce message defile hors de l'ecran
+    (VGA texte, sans historique de defilement) avant meme
+    d'etre lisible. Cette commande rend ce statut consultable a
+    tout moment, une fois connecte.
+*/
+
+static void cmd_gfxstatus()
 {
 
 
-/*
-    Correctif (session precedente) : gui/gui.c fournit des
-    primitives completes et fonctionnelles (fenetres/boites en
-    mode texte avec bordures ASCII -- voir la note dans gui.h :
-    pas de vrai pilote graphique en pixels dans ce projet) mais
-    aucun appelant nulle part dans le noyau ne les utilisait.
+if(gfx_available())
+{
 
-    Correctif complementaire : une fois branchee, cette fenetre
-    affichait un texte de demonstration totalement generique,
-    sans le moindre lien avec security/user.c -- la session
-    ouverte par login_prompt() (security/login.c) et la GUI
-    restaient deux mondes completement etanches : on pouvait
-    ouvrir "gui" sans que rien n'y indique qui est connecte, ni
-    avec quels droits. On y affiche desormais le statut reel de
-    la session en cours (utilisateur, role, permissions), via
-    user_get_current() et check_permission() -- les memes
-    fonctions que "whoami" utilise deja pour le shell texte.
+console_write("Graphique (VBE) : actif\n");
+
+}
+else
+{
+
+console_write("Graphique (VBE) : indisponible -- mode texte uniquement\n");
+
+}
+
+
+}
+
+
+
+/*
+    Petit helper de conversion entier signe -> texte, absent du
+    reste du projet (libc/string.c ne fournit que des fonctions
+    de chaines, pas de conversion numerique) -- necessaire pour
+    afficher la position de la souris.
 */
 
-console_clear();
+static void write_int(s32 value)
+{
+
+char buffer[12];
+
+int i = 0;
+
+int negative = 0;
 
 
-gui_draw_window(10, 4, 58, 14, "Mikea OS - Session", 0x1F);
+if (value < 0)
+{
+
+negative = 1;
+
+value = -value;
+
+}
+
+
+if (value == 0)
+{
+
+buffer[i++] = '0';
+
+}
+
+
+while (value > 0)
+{
+
+buffer[i++] = (char)('0' + (value % 10));
+
+value /= 10;
+
+}
+
+
+if (negative)
+{
+
+console_write("-");
+
+}
+
+
+while (i > 0)
+{
+
+i--;
+
+char c[2];
+
+c[0] = buffer[i];
+
+c[1] = 0;
+
+console_write(c);
+
+}
+
+}
+
+
+/*
+    Test du pilote souris PS/2 (kernel/drivers/mouse) : affiche
+    des lectures successives de la position et des boutons,
+    espacees par timer_ticks(), pour verifier que le
+    deplacement de la souris est bien capte -- deplacez la
+    souris pendant que cette commande tourne.
+*/
+
+static void cmd_mouse()
+{
+
+
+console_write("Statut initialisation : ");
+
+console_write(mouse_get_init_status());
+
+console_write("\n");
+
+
+if (!gfx_available())
+{
+
+console_write("Souris : le pilote fonctionne independamment du mode graphique,\n");
+
+console_write("mais la position n'est utile qu'en mode graphique (voir gfxstatus).\n");
+
+}
+
+
+console_write("Deplacez la souris... (10 lectures)\n");
+
+
+for (int sample = 0; sample < 10; sample++)
+{
+
+
+unsigned long start = timer_ticks();
+
+while (timer_ticks() - start < 20)
+{
+
+/* Attente active bornee (~200ms a 100Hz) entre deux lectures. */
+
+}
+
+
+console_write("x=");
+
+write_int(mouse_get_x());
+
+console_write(" y=");
+
+write_int(mouse_get_y());
+
+console_write(" boutons: ");
+
+console_write(mouse_left_pressed() ? "G " : ". ");
+
+console_write(mouse_right_pressed() ? "D " : ". ");
+
+console_write(mouse_middle_pressed() ? "M" : ".");
+
+console_write("\n");
+
+
+}
+
+
+}
+
+
+
+/*
+    Contenu de la fenetre "Session" (statut utilisateur),
+    extrait dans son propre helper pour pouvoir etre redessine
+    a chaque image de la boucle interactive ci-dessous (etape 5 :
+    curseur souris + bouton de fermeture cliquable).
+*/
+
+static void gui_draw_session_content()
+{
 
 
 user* current = user_get_current();
@@ -900,11 +1073,12 @@ user* current = user_get_current();
 if(current == 0)
 {
 
-gui_draw_text(13, 8, "Aucun utilisateur connecte.", 0x1F);
+gui_draw_text(5, 6, "Aucun utilisateur connecte.", 0x1F);
+
+return;
 
 }
-else
-{
+
 
 /*
     "Utilisateur : " + nom, construit caractere par
@@ -942,41 +1116,41 @@ j++;
 
 line[i] = 0;
 
-gui_draw_text(13, 7, line, 0x1F);
+gui_draw_text(5, 5, line, 0x1F);
 
 
 if(current->id == 1)
 {
 
-gui_draw_text(13, 8, "Role : administrateur (root)", 0x1F);
+gui_draw_text(5, 6, "Role : administrateur (root)", 0x1F);
 
 }
 else
 {
 
-gui_draw_text(13, 8, "Role : utilisateur standard", 0x1F);
+gui_draw_text(5, 6, "Role : utilisateur standard", 0x1F);
 
 }
 
 
-gui_draw_text(13, 10, "Permissions :", 0x1F);
+gui_draw_text(5, 8, "Permissions :", 0x1F);
 
 gui_draw_text(
-15, 11,
+7, 9,
 check_permission((int)current->id, PERMISSION_READ)
 ? "Lecture    : oui" : "Lecture    : non",
 0x1F
 );
 
 gui_draw_text(
-15, 12,
+7, 10,
 check_permission((int)current->id, PERMISSION_WRITE)
 ? "Ecriture   : oui" : "Ecriture   : non",
 0x1F
 );
 
 gui_draw_text(
-15, 13,
+7, 11,
 check_permission((int)current->id, PERMISSION_EXEC)
 ? "Execution  : oui" : "Execution  : non",
 0x1F
@@ -985,13 +1159,119 @@ check_permission((int)current->id, PERMISSION_EXEC)
 }
 
 
-gui_draw_text(13, 16, "Appuyez sur Entree pour revenir au shell...", 0x1F);
+
+/*
+    Correctif (session precedente) : gui/gui.c fournit des
+    primitives completes et fonctionnelles mais aucun appelant
+    nulle part dans le noyau ne les utilisait. Affiche le
+    statut reel de la session en cours (utilisateur, role,
+    permissions), via user_get_current() et check_permission().
+
+    Etape 5 (souris <-> fenetre) : en mode graphique, boucle
+    interactive avec curseur souris et bouton de fermeture
+    cliquable, en plus de la fermeture au clavier (Entree)
+    deja existante. En mode texte (pas de souris a afficher
+    dans un terminal), seule la fermeture au clavier reste
+    disponible, comme avant.
+*/
+
+static void cmd_gui()
+{
+
+
+if (!gfx_available())
+{
+
+console_clear();
+
+gui_draw_window(2, 2, 36, 16, "Mikea OS - Session", 0x1F, (void*)0, (void*)0, (void*)0);
+
+gui_draw_session_content();
+
+gui_draw_text(5, 14, "Appuyez sur Entree pour revenir au shell...", 0x1F);
 
 
 char dummy[8];
 
+keyboard_flush();
 
 input_readline(dummy, sizeof(dummy));
+
+
+console_clear();
+
+return;
+
+}
+
+
+u32 close_x = 0;
+
+u32 close_y = 0;
+
+u32 close_size = 0;
+
+
+keyboard_flush();
+
+
+while (1)
+{
+
+
+console_clear();
+
+gui_draw_window(2, 2, 36, 16, "Mikea OS - Session", 0x1F, &close_x, &close_y, &close_size);
+
+gui_draw_session_content();
+
+gui_draw_text(5, 14, "Cliquez sur X ou Entree pour fermer", 0x1F);
+
+
+s32 mx = mouse_get_x();
+
+s32 my = mouse_get_y();
+
+gui_draw_cursor(mx, my);
+
+
+if (mouse_left_pressed() && gui_point_in_button(close_x, close_y, close_size, mx, my))
+{
+
+break;
+
+}
+
+
+if (keyboard_available())
+{
+
+char c = keyboard_getchar();
+
+if (c == '\n')
+{
+
+break;
+
+}
+
+}
+
+
+/*
+    Cadence de la boucle (~30ms par image a 100Hz) : evite de
+    redessiner la fenetre entiere en boucle a pleine vitesse
+    CPU pour un gain visuel nul.
+*/
+
+unsigned long frame_start = timer_ticks();
+
+while (timer_ticks() - frame_start < 3)
+{
+}
+
+
+}
 
 
 console_clear();
@@ -1069,6 +1349,8 @@ console_write("cat <name>\n");
 console_write("rm <name>\n");
 console_write("ls\n");
 console_write("gui\n");
+console_write("gfxstatus\n");
+console_write("mouse\n");
 console_write("run <name>\n");
 
 
@@ -1276,6 +1558,22 @@ else if(mk_strcmp(command, "gui") == 0)
 {
 
 cmd_gui();
+
+}
+
+
+else if(mk_strcmp(command, "gfxstatus") == 0)
+{
+
+cmd_gfxstatus();
+
+}
+
+
+else if(mk_strcmp(command, "mouse") == 0)
+{
+
+cmd_mouse();
 
 }
 

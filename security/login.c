@@ -87,25 +87,6 @@ sizeof(password)
 );
 
 
-/*
-    ============================================================
-    DIAGNOSTIC TEMPORAIRE -- A RETIRER une fois le probleme de
-    connexion confirme resolu (voir le README, section
-    Depannage). Affiche en clair exactement ce qui a ete capture
-    pour le nom d'utilisateur et le mot de passe, afin de
-    distinguer une faute de frappe invisible (mot de passe
-    masque par des '*') d'un probleme plus profond.
-*/
-
-console_write("[diagnostic] identifiant capture: [");
-console_write(username);
-console_write("]\n");
-
-console_write("[diagnostic] mot de passe capture: [");
-console_write(password);
-console_write("]\n");
-
-
 user* logged_in = user_login(username, password);
 
 

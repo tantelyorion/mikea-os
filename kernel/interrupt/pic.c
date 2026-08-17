@@ -99,3 +99,63 @@ outb(PIC2_COMMAND, PIC_EOI);
 outb(PIC1_COMMAND, PIC_EOI);
 
 }
+
+
+
+/*
+    Demasque une IRQ materielle precise (0-15) : jusqu'ici,
+    pic_remap() se contentait de PRESERVER le masque herite du
+    BIOS (voir plus haut), sans jamais en changer le contenu.
+    Cela fonctionnait par chance pour le clavier (IRQ1,
+    generalement demasque par defaut) mais rien ne garantit
+    qu'une IRQ donnee (ex. IRQ12, souris PS/2) le soit deja --
+    on la demasque donc ici explicitement plutot que de
+    supposer un etat par defaut.
+*/
+
+void pic_unmask_irq(u8 irq)
+{
+
+u16 port;
+
+u8 value;
+
+
+if (irq < 8)
+{
+
+port = PIC1_DATA;
+
+}
+else
+{
+
+port = PIC2_DATA;
+
+irq -= 8;
+
+}
+
+
+value = inb(port) & ~(1 << irq);
+
+outb(port, value);
+
+
+/*
+    L'IRQ2 (cascade) doit toujours rester demasquee sur le
+    PIC maitre pour que les IRQ8-15 de l'esclave puissent
+    remonter -- sans quoi demasquer une IRQ esclave seule
+    (ex. 12) ne suffit pas a la laisser passer.
+*/
+
+if (port == PIC2_DATA)
+{
+
+value = inb(PIC1_DATA) & ~(1 << 2);
+
+outb(PIC1_DATA, value);
+
+}
+
+}

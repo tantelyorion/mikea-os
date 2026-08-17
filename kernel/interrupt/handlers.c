@@ -10,6 +10,8 @@
 
 #include "../drivers/keyboard/keyboard.h"
 
+#include "../drivers/mouse/mouse.h"
+
 
 
 void isr_handler(u64 vector)
@@ -64,6 +66,14 @@ else if (irq == 1)
 /* IRQ1 : clavier PS/2. */
 
 keyboard_handle_irq();
+
+}
+else if (irq == 12)
+{
+
+/* IRQ12 : souris PS/2. */
+
+mouse_handle_irq();
 
 }
 

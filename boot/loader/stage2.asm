@@ -67,9 +67,9 @@ out 0x92,al
 ; n'est pas atteignable avec un simple ES:BX 16 bits en mode
 ; reel standard (voir plus bas, section "protected:").
 ;
-; kernel.bin commence au secteur logique (LBA) 65 du disque :
-; LBA 0 = le secteur de demarrage (boot.asm), LBA 1-64 =
-; stage2.bin (complete pour occuper exactement ces 64
+; kernel.bin commence au secteur logique (LBA) 97 du disque :
+; LBA 0 = le secteur de demarrage (boot.asm), LBA 1-96 =
+; stage2.bin (complete pour occuper exactement ces 96
 ; secteurs, voir le "times" final de ce fichier, afin que cet
 ; emplacement soit fixe quelle que soit la taille reelle du
 ; code de stage2). 600 secteurs (300 Ko) de marge sont lus,
@@ -130,6 +130,316 @@ jnz .read_kernel_chunk
 
 mov si,msg_kernel_loaded
 call print_string_rm
+
+
+
+; ============================================================
+; Detection VESA/VBE (etape 1/2 vers une interface graphique
+; en pixels)
+; ============================================================
+;
+; IMPORTANT -- ce bloc ne fait QUE detecter et choisir un mode
+; graphique candidat. Il n'appelle PAS la fonction BIOS qui
+; change reellement de mode video (INT10h AX=0x4F02) : l'ecran
+; continue donc de fonctionner exactement comme avant, en mode
+; texte BIOS standard, jusqu'au bout du demarrage. Ce choix est
+; deliberement prudent : une fois le mode video reellement
+; change, le tampon texte 0xB8000 (utilise par TOUT l'affichage
+; actuel : messages de demarrage, ecran de connexion, shell)
+; cesse instantanement de s'afficher, puisque la carte video
+; n'est alors plus en mode texte. Basculer reellement de mode
+; suppose donc d'abord qu'un afficheur de texte sur pixels
+; (police + "console" graphique) existe cote noyau C pour
+; prendre le relais sans ecran noir entre les deux -- ce
+; n'est pas encore le cas. Ce bloc pose seulement les bases :
+; verifier que VBE existe, et si oui laisser dans le tampon fixe
+; 0x7E00 les caracteristiques d'un mode graphique lineaire
+; utilisable plus tard (adresse physique du framebuffer,
+; largeur/hauteur/profondeur de couleur), pour que le noyau C
+; puisse deja les lire et s'y preparer.
+
+xor ax,ax
+mov es,ax
+
+
+mov byte [vbe_info_block+0],'V'
+mov byte [vbe_info_block+1],'B'
+mov byte [vbe_info_block+2],'E'
+mov byte [vbe_info_block+3],'2'
+
+mov di,vbe_info_block
+
+mov ax,0x4F00
+
+int 0x10
+
+cmp ax,0x004F
+
+jne vbe_not_available
+
+
+cmp byte [vbe_info_block+0],'V'
+jne vbe_not_available
+
+cmp byte [vbe_info_block+1],'E'
+jne vbe_not_available
+
+cmp byte [vbe_info_block+2],'S'
+jne vbe_not_available
+
+cmp byte [vbe_info_block+3],'A'
+jne vbe_not_available
+
+
+; Pointeur far (offset puis segment) vers la liste des numeros
+; de mode disponibles, terminee par 0xFFFF.
+
+mov si,[vbe_info_block+14]
+
+mov ax,[vbe_info_block+16]
+
+mov [vbe_modelist_seg],ax
+
+mov [vbe_modelist_off],si
+
+
+mov word [vbe_chosen_mode],0xFFFF
+
+
+; Correctif stabilite (coherent avec ata_wait_ready(), voir
+; filesystem/disk.c) : cette boucle depend d'un BIOS externe
+; qui est cense terminer la liste des modes par 0xFFFF, mais
+; rien ne garantit formellement qu'un BIOS non standard le
+; fasse. On borne donc le nombre d'iterations (largement
+; au-dessus du nombre reel de modes que fournit un BIOS VBE
+; normal, generalement quelques dizaines tout au plus) pour
+; ne jamais risquer un demarrage fige indefiniment ici.
+
+mov word [vbe_loop_guard],200
+
+
+.vbe_mode_loop:
+
+dec word [vbe_loop_guard]
+
+jz .vbe_mode_loop_done
+
+
+mov ax,[vbe_modelist_seg]
+mov es,ax
+
+mov si,[vbe_modelist_off]
+
+mov cx,[es:si]
+
+cmp cx,0xFFFF
+
+je .vbe_mode_loop_done
+
+
+add si,2
+
+mov [vbe_modelist_off],si
+
+
+; ES:DI doit pointer vers un tampon dans NOTRE segment (0),
+; pas celui (potentiellement different) de la liste de modes
+; du BIOS -- d'ou la reinitialisation d'ES ici.
+
+push cx
+
+xor ax,ax
+mov es,ax
+
+mov di,vbe_mode_info
+
+pop cx
+
+
+mov ax,0x4F01
+
+int 0x10
+
+
+cmp ax,0x004F
+
+jne .vbe_mode_loop
+
+
+; Bit 7 des attributs de mode (offset 0x00) = framebuffer
+; lineaire disponible pour ce mode.
+
+mov ax,[vbe_mode_info+0x00]
+
+test ax,0x0080
+
+jz .vbe_mode_loop
+
+
+; Modele memoire (offset 0x1B) = 6 -> couleur directe (RGB),
+; pas un mode a palette indexee.
+
+mov al,[vbe_mode_info+0x1B]
+
+cmp al,6
+
+jne .vbe_mode_loop
+
+
+; Profondeur de couleur (offset 0x19) : au moins 24 bits, pour
+; une vraie palette RGB complete plutot qu'un mode restreint.
+
+mov al,[vbe_mode_info+0x19]
+
+cmp al,24
+
+jb .vbe_mode_loop
+
+
+; Largeur (offset 0x12) : entre 640 et 1280 -- evite les
+; resolutions minuscules ou au contraire trop gourmandes en
+; memoire pour un tout premier mode graphique.
+
+mov ax,[vbe_mode_info+0x12]
+
+cmp ax,640
+
+jb .vbe_mode_loop
+
+cmp ax,1280
+
+ja .vbe_mode_loop
+
+
+; Mode candidat retenu : on enregistre ses caracteristiques a
+; l'adresse fixe 0x7E00 (voir le commentaire plus haut), puis on
+; arrete la recherche au premier mode valable trouve.
+
+mov [vbe_chosen_mode],cx
+
+
+mov eax,[vbe_mode_info+0x28]        ; PhysBasePtr
+
+mov [0x7E00],eax
+
+
+xor eax,eax
+
+mov ax,[vbe_mode_info+0x10]         ; BytesPerScanLine
+
+mov [0x7E04],eax
+
+
+xor eax,eax
+
+mov ax,[vbe_mode_info+0x12]         ; XResolution
+
+mov [0x7E08],eax
+
+
+xor eax,eax
+
+mov ax,[vbe_mode_info+0x14]         ; YResolution
+
+mov [0x7E0C],eax
+
+
+mov al,[vbe_mode_info+0x19]         ; BitsPerPixel
+
+mov [0x7E10],al
+
+
+mov byte [0x7E11],1                 ; fb_valid = 1
+
+
+; Positions/tailles des canaux couleur (necessaires pour
+; empaqueter correctement une couleur RGB dans le format natif
+; du framebuffer -- tous les BIOS VBE ne placent pas forcement
+; rouge/vert/bleu aux memes bits).
+
+mov al,[vbe_mode_info+0x1F]         ; RedMaskSize
+mov [0x7E12],al
+
+mov al,[vbe_mode_info+0x20]         ; RedFieldPosition
+mov [0x7E13],al
+
+mov al,[vbe_mode_info+0x21]         ; GreenMaskSize
+mov [0x7E14],al
+
+mov al,[vbe_mode_info+0x22]         ; GreenFieldPosition
+mov [0x7E15],al
+
+mov al,[vbe_mode_info+0x23]         ; BlueMaskSize
+mov [0x7E16],al
+
+mov al,[vbe_mode_info+0x24]         ; BlueFieldPosition
+mov [0x7E17],al
+
+
+jmp .vbe_mode_loop_done
+
+
+
+.vbe_mode_loop_done:
+
+
+cmp word [vbe_chosen_mode],0xFFFF
+
+je vbe_not_available
+
+
+; ============================================================
+; Activation reelle du mode graphique (etape 2)
+; ============================================================
+;
+; Point sans retour : une fois cet appel reussi, le tampon
+; texte 0xB8000 cesse de s'afficher -- mais un noyau C pret a
+; prendre le relais existe desormais (kernel/console/console.c
+; bascule automatiquement vers le rendu pixel des que
+; gfx_available() renvoie vrai). Si CET appel echoue, on bascule
+; sur le meme chemin que "VBE non disponible" : fb_valid reste
+; a 0, le systeme continue en mode texte exactement comme
+; aujourd'hui, sans aucun risque.
+;
+; Le message de confirmation est affiche AVANT l'appel qui
+; change reellement de mode : l'affichage BIOS classique
+; (INT10h AH=0x0E, utilise par print_string_rm) ne fonctionne
+; plus une fois en mode graphique, ce message ne serait donc
+; jamais visible s'il etait affiche apres.
+
+mov si,msg_vbe_found
+
+call print_string_rm
+
+
+mov bx,[vbe_chosen_mode]
+
+or bx,0x4000                        ; bit 14 = utiliser le framebuffer lineaire
+
+mov ax,0x4F02
+
+int 0x10
+
+
+cmp ax,0x004F
+
+jne vbe_not_available
+
+
+jmp vbe_done
+
+
+
+vbe_not_available:
+
+mov byte [0x7E11],0                 ; fb_valid = 0
+
+mov si,msg_vbe_none
+
+call print_string_rm
+
+
+vbe_done:
 
 
 
@@ -211,10 +521,74 @@ db "[stage2] Erreur de lecture disque (noyau)",13,10
 db 0
 
 
+msg_vbe_found:
+
+db "[stage2] VBE detecte, activation du mode graphique...",13,10
+db 0
+
+
+msg_vbe_none:
+
+db "[stage2] VBE non disponible (mode texte conserve)",13,10
+db 0
+
+
 
 boot_drive:
 
 db 0
+
+
+
+; ------------------------------------------------------------
+; Zones memoire pour la detection VESA/VBE
+; ------------------------------------------------------------
+;
+; vbe_info_block : tampon de 512 octets pour la reponse BIOS a
+; INT10h AX=0x4F00 (VBE Controller Information).
+;
+; vbe_mode_info : tampon de 256 octets pour la reponse BIOS a
+; INT10h AX=0x4F01 (VBE Mode Information), reutilise a chaque
+; iteration de la boucle de recherche de mode.
+;
+; vbe_modelist_seg/off : segment:offset courants dans la liste
+; des numeros de mode fournie par le BIOS (terminee par
+; 0xFFFF), sauvegardes en memoire plutot que gardes dans des
+; registres, puisque chaque appel INT10h AX=0x4F01 est
+; susceptible de modifier de nombreux registres.
+;
+; vbe_chosen_mode : numero du mode retenu (0xFFFF si aucun mode
+; adapte n'a ete trouve).
+
+vbe_modelist_seg:
+
+dw 0
+
+
+vbe_modelist_off:
+
+dw 0
+
+
+vbe_chosen_mode:
+
+dw 0xFFFF
+
+
+vbe_loop_guard:
+
+dw 0
+
+
+vbe_info_block:
+
+times 512 db 0
+
+
+vbe_mode_info:
+
+times 256 db 0
+
 
 
 ; ------------------------------------------------------------
@@ -242,7 +616,7 @@ dw 0x1000
 
 dap_kernel_lba:
 
-dq 65
+dq 97
 
 
 
@@ -514,11 +888,26 @@ db "[stage2] Appel du noyau...",0
 ; PDPT -> PD) avec des pages de 2 Mo (bit PS) : toujours
 ; disponibles en mode long, contrairement aux pages de 1 Go qui
 ; dependent d'une fonctionnalite CPU optionnelle (PDPE1GB) non
-; garantie sur tout processeur x86-64. 32 entrees PD suffisent
-; a mapper en identite (adresse physique = adresse virtuelle)
-; les 64 premiers Mo de RAM physique -- largement de quoi
-; couvrir le noyau (charge a 1 Mo, voir linker.ld KERNEL_BASE),
-; son tas (kernel/memory/heap.c) et sa pile.
+; garantie sur tout processeur x86-64.
+;
+; Correctif critique (etape 2 interface graphique, ecran qui
+; boucle au demarrage) : ce mappage identite ne couvrait
+; auparavant que les 64 premiers Mo de RAM physique -- largement
+; suffisant pour le noyau, son tas et sa pile, MAIS le
+; framebuffer lineaire VBE (voir la detection plus haut) est
+; presque toujours place par le materiel/l'emulateur bien plus
+; haut en memoire physique (typiquement autour de 0xE0000000-
+; 0xFD000000, soit 3,5 a 4 Go -- un emplacement PCI classique,
+; delibere ment loin de la RAM). Toute ecriture du pilote
+; graphique (kernel/drivers/graphics.c) sur une adresse non
+; mappee declenche un defaut de page non gere (aucun
+; gestionnaire d'exception n'existe encore a ce stade du
+; demarrage) puis un triple fault -- la machine redemarre en
+; boucle silencieusement, exactement le symptome observe. On
+; couvre desormais tout l'espace physique 32 bits (4 Go) en
+; identite, via 4 tables PD de 512 entrees chacune (2048 pages
+; de 2 Mo = 4096 Mo), quel que soit l'endroit precis ou le
+; materiel place le framebuffer.
 
 align 4096
 
@@ -533,18 +922,21 @@ align 4096
 
 pdpt:
 
-dq pd + 0x3
+dq pd0 + 0x3
+dq pd1 + 0x3
+dq pd2 + 0x3
+dq pd3 + 0x3
 
-times 511 dq 0
+times 508 dq 0
 
 
 align 4096
 
-pd:
+pd0:
 
 %assign pd_index 0
 
-%rep 32
+%rep 512
 
 dq (pd_index * 0x200000) | 0x83
 
@@ -552,7 +944,50 @@ dq (pd_index * 0x200000) | 0x83
 
 %endrep
 
-times (512-32) dq 0
+
+align 4096
+
+pd1:
+
+%assign pd_index 512
+
+%rep 512
+
+dq (pd_index * 0x200000) | 0x83
+
+%assign pd_index pd_index+1
+
+%endrep
+
+
+align 4096
+
+pd2:
+
+%assign pd_index 1024
+
+%rep 512
+
+dq (pd_index * 0x200000) | 0x83
+
+%assign pd_index pd_index+1
+
+%endrep
+
+
+align 4096
+
+pd3:
+
+%assign pd_index 1536
+
+%rep 512
+
+dq (pd_index * 0x200000) | 0x83
+
+%assign pd_index pd_index+1
+
+%endrep
 
 
 
@@ -660,12 +1095,18 @@ dd gdt
 ; PADDING
 ; ==========================
 ;
-; Complete stage2.bin jusqu'a occuper exactement 64 secteurs
-; (32 768 octets), quelle que soit la taille reelle du code
+; Complete stage2.bin jusqu'a occuper exactement 96 secteurs
+; (49 152 octets), quelle que soit la taille reelle du code
 ; ci-dessus. Indispensable pour que kernel.bin commence
-; toujours a un emplacement disque fixe et connu (LBA 65, voir
+; toujours a un emplacement disque fixe et connu (LBA 97, voir
 ; "dap_kernel" plus haut) : boot.asm et stage2.asm determinent
 ; cet emplacement par un decalage constant plutot qu'en lisant
 ; la taille reelle de stage2.bin sur le disque.
+;
+; Correctif (marge de taille) : 96 secteurs au lieu de 64
+; depuis que les tables de pages couvrent 4 Go d'identity
+; mapping (voir plus haut) au lieu de 64 Mo -- voir aussi
+; boot/bios/boot.asm (dap_stage2) qui doit rester synchronise
+; avec cette meme valeur.
 
-times 32768-($-$$) db 0
+times 49152-($-$$) db 0
