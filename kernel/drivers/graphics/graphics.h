@@ -94,4 +94,23 @@ void gfx_clear(gfx_color color);
 void gfx_scroll_up(u32 pixel_rows, gfx_color bg);
 
 
+/*
+    Lit/ecrit les octets bruts (pas de conversion de couleur)
+    d'une zone rectangulaire, "bpp"/8 octets par pixel. Utilise
+    pour sauvegarder puis restaurer le fond situe sous le
+    curseur souris (voir gui_draw_cursor(), gui/gui.c) : cela
+    evite d'avoir a redessiner toute la fenetre a chaque
+    deplacement de la souris, seule source du scintillement
+    observe avant ce correctif. "buffer" doit faire au moins
+    w*h*(gfx_bpp()/8) octets.
+*/
+
+void gfx_read_rect(u32 x, u32 y, u32 w, u32 h, u8* buffer);
+
+void gfx_write_rect(u32 x, u32 y, u32 w, u32 h, const u8* buffer);
+
+
+u32 gfx_bpp();
+
+
 #endif

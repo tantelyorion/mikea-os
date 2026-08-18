@@ -65,6 +65,16 @@ void gui_draw_cursor(s32 x, s32 y);
 
 
 /*
+    Restaure le fond sous la derniere position dessinee du
+    curseur, sans rien dessiner de nouveau. A appeler avant de
+    quitter une boucle interactive utilisant gui_draw_cursor(),
+    pour ne pas laisser de trace visible.
+*/
+
+void gui_cursor_erase();
+
+
+/*
     Teste si le point pixel (px, py) se trouve dans un bouton
     carre de cote "bsize" dont le coin superieur gauche est
     (bx, by) -- voir les coordonnees renvoyees par
@@ -72,6 +82,29 @@ void gui_draw_cursor(s32 x, s32 y);
 */
 
 int gui_point_in_button(u32 bx, u32 by, u32 bsize, s32 px, s32 py);
+
+
+/*
+    Version generique (rectangle, pas seulement carre) du test
+    de collision ci-dessus -- utilisee par les boutons
+    d'application (ex. calculatrice) qui ne sont pas forcement
+    carres.
+*/
+
+int gui_point_in_rect(u32 rx, u32 ry, u32 rw, u32 rh, s32 px, s32 py);
+
+
+/*
+    Dessine un bouton rectangulaire generique (bordure +
+    libelle centre approximativement), en caracteres (x, y,
+    width, height). Renvoie ses coordonnees pixel via
+    out_x/out_y/out_w/out_h (peuvent etre nuls), pour un test
+    de collision avec gui_point_in_rect(). Sans effet en mode
+    texte (les applications interactives -- calculatrice etc. --
+    necessitent une souris, donc le mode graphique).
+*/
+
+void gui_draw_button(int x, int y, int w, int h, const char* label, u32* out_x, u32* out_y, u32* out_w, u32* out_h);
 
 
 #endif

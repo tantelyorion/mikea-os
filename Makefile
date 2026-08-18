@@ -159,7 +159,7 @@ ISR_STUBS_OBJ = $(OBJDIR)/isr_stubs.o
 # utilisateur au format MKX, distincts du noyau (a
 # construire separement avec le futur outil mkx). sdk/ est
 # uniquement compose de headers (pas de .c a compiler).
-C_SOURCES = $(shell find kernel filesystem shell security packages mkx libc gui -name "*.c" 2>/dev/null)
+C_SOURCES = $(shell find kernel filesystem shell security packages mkx libc gui boot/installer -name "*.c" 2>/dev/null)
 
 C_OBJECTS = $(patsubst %.c,$(OBJDIR)/%.o,$(C_SOURCES))
 

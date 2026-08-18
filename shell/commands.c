@@ -22,6 +22,8 @@
 
 #include "../kernel/drivers/mouse/mouse.h"
 
+#include "../boot/installer/installer.h"
+
 #include "../kernel/process/process.h"
 
 #include "../mkx/mkx.h"
@@ -1058,6 +1060,623 @@ console_write("\n");
 
 
 /*
+    Installe MikeaOS sur le disque de donnees (voir
+    boot/installer/installer.c) : copie l'image de demarrage
+    du disque maitre (celui sur lequel le systeme tourne
+    actuellement) vers le disque esclave, avec verification
+    immediate de chaque secteur ecrit.
+
+    Operation destructive et reservee a root (comme
+    "useradd"/"userdel") : exige une confirmation explicite
+    ("OUI" en toutes lettres, pas juste Entree) avant de
+    commencer.
+*/
+
+static void cmd_install()
+{
+
+
+user* current = user_get_current();
+
+if (current == 0 || current->id != 1)
+{
+
+console_write("Permission denied: reserve a root\n");
+
+return;
+
+}
+
+
+console_write("ATTENTION : ceci va EFFACER le disque de donnees actuel\n");
+
+console_write("et le remplacer par une copie demarrable de MikeaOS.\n");
+
+console_write("Tapez OUI (en majuscules) pour confirmer, autre chose pour annuler :\n");
+
+
+char confirm[8];
+
+keyboard_flush();
+
+input_readline(confirm, sizeof(confirm));
+
+
+if (mk_strcmp(confirm, "OUI") != 0)
+{
+
+console_write("Installation annulee.\n");
+
+return;
+
+}
+
+
+console_write("Installation en cours (2048 secteurs, 1 Mo)...\n");
+
+
+install_result result = installer_run((void*)0);
+
+
+if (result == INSTALL_OK)
+{
+
+console_write("Installation reussie et verifiee.\n");
+
+console_write("Pour demarrer dessus : dans QEMU, inversez l'ordre des deux\n");
+
+console_write("'-drive' (le disque installe doit passer en premier).\n");
+
+}
+else
+{
+
+console_write("Installation echouee -- voir le message d'erreur ci-dessus.\n");
+
+}
+
+
+}
+
+
+
+/*
+    Calculatrice (application systeme par defaut, mode
+    graphique uniquement -- necessite la souris). Arithmetique
+    entiere simple, sans priorite d'operateurs (evalue de
+    gauche a droite au fur et a mesure), suffisant pour une
+    calculatrice basique.
+*/
+
+static void write_int_buf(int value, char* out)
+{
+
+char tmp[12];
+
+int i = 0;
+
+int negative = 0;
+
+
+if (value < 0)
+{
+
+negative = 1;
+
+value = -value;
+
+}
+
+
+if (value == 0)
+{
+
+tmp[i++] = '0';
+
+}
+
+
+while (value > 0)
+{
+
+tmp[i++] = (char)('0' + (value % 10));
+
+value /= 10;
+
+}
+
+
+int j = 0;
+
+if (negative)
+{
+
+out[j++] = '-';
+
+}
+
+
+while (i > 0)
+{
+
+i--;
+
+out[j++] = tmp[i];
+
+}
+
+out[j] = 0;
+
+}
+
+
+static void cmd_calc()
+{
+
+
+if (!gfx_available())
+{
+
+console_write("La calculatrice necessite le mode graphique et une souris (voir gfxstatus).\n");
+
+return;
+
+}
+
+
+int win_x = 2, win_y = 2, win_w = 22, win_h = 20;
+
+
+int current_value = 0;
+
+int pending_value = 0;
+
+char pending_op = 0;
+
+int just_computed = 0;
+
+
+char display[16];
+
+write_int_buf(current_value, display);
+
+
+/* Disposition : grille 4x4 de boutons. */
+
+const char* labels[4][4] = {
+{"7", "8", "9", "/"},
+{"4", "5", "6", "*"},
+{"1", "2", "3", "-"},
+{"C", "0", "=", "+"}
+};
+
+u32 btn_x[4][4], btn_y[4][4], btn_w[4][4], btn_h[4][4];
+
+
+console_clear();
+
+gui_draw_window(win_x, win_y, win_w, win_h, "Calculatrice", 0x1F, (void*)0, (void*)0, (void*)0);
+
+gui_draw_button(win_x + 1, win_y + 2, win_w - 2, 3, display, (void*)0, (void*)0, (void*)0, (void*)0);
+
+
+for (int row = 0; row < 4; row++)
+{
+
+for (int col = 0; col < 4; col++)
+{
+
+int bx = win_x + 1 + col * 5;
+
+int by = win_y + 6 + row * 3;
+
+gui_draw_button(bx, by, 4, 2, labels[row][col], &btn_x[row][col], &btn_y[row][col], &btn_w[row][col], &btn_h[row][col]);
+
+}
+
+}
+
+
+gui_draw_text(win_x + 1, win_y + win_h - 2, "X pour fermer", 0x1F);
+
+
+keyboard_flush();
+
+
+int was_pressed = 0;
+
+
+while (1)
+{
+
+
+s32 mx = mouse_get_x();
+
+s32 my = mouse_get_y();
+
+gui_draw_cursor(mx, my);
+
+
+int now_pressed = mouse_left_pressed();
+
+int clicked = (now_pressed && !was_pressed);
+
+was_pressed = now_pressed;
+
+
+if (clicked)
+{
+
+
+int hit_row = -1, hit_col = -1;
+
+for (int row = 0; row < 4 && hit_row < 0; row++)
+{
+
+for (int col = 0; col < 4; col++)
+{
+
+if (gui_point_in_rect(btn_x[row][col], btn_y[row][col], btn_w[row][col], btn_h[row][col], mx, my))
+{
+
+hit_row = row;
+
+hit_col = col;
+
+break;
+
+}
+
+}
+
+}
+
+
+if (hit_row >= 0)
+{
+
+const char* label = labels[hit_row][hit_col];
+
+
+if (label[0] >= '0' && label[0] <= '9')
+{
+
+if (just_computed)
+{
+
+current_value = 0;
+
+just_computed = 0;
+
+}
+
+current_value = current_value * 10 + (label[0] - '0');
+
+}
+else if (label[0] == 'C')
+{
+
+current_value = 0;
+
+pending_value = 0;
+
+pending_op = 0;
+
+just_computed = 0;
+
+}
+else if (label[0] == '=')
+{
+
+if (pending_op != 0)
+{
+
+if (pending_op == '+') { current_value = pending_value + current_value; }
+else if (pending_op == '-') { current_value = pending_value - current_value; }
+else if (pending_op == '*') { current_value = pending_value * current_value; }
+else if (pending_op == '/') { current_value = (current_value != 0) ? pending_value / current_value : 0; }
+
+pending_op = 0;
+
+just_computed = 1;
+
+}
+
+}
+else
+{
+
+/* Operateur : + - * / */
+
+pending_value = current_value;
+
+pending_op = label[0];
+
+current_value = 0;
+
+}
+
+
+write_int_buf(current_value, display);
+
+gui_draw_button(win_x + 1, win_y + 2, win_w - 2, 3, display, (void*)0, (void*)0, (void*)0, (void*)0);
+
+}
+
+}
+
+
+if (keyboard_available())
+{
+
+char c = keyboard_getchar();
+
+if (c == '\n')
+{
+
+break;
+
+}
+
+}
+
+
+unsigned long frame_start = timer_ticks();
+
+while (timer_ticks() - frame_start < 1)
+{
+}
+
+
+}
+
+
+console_clear();
+
+
+}
+
+
+
+/*
+    Explorateur de fichiers (application systeme par defaut,
+    mode graphique uniquement). Deux etats : liste des fichiers
+    (clic sur un nom pour l'ouvrir) et contenu d'un fichier
+    (clic ou Entree pour revenir a la liste). Reutilise
+    inode_get()/MAX_INODES exactement comme "ls" (voir
+    cmd_ls()), et file_read() exactement comme "cat".
+*/
+
+static void cmd_files()
+{
+
+
+if (!gfx_available())
+{
+
+console_write("L'explorateur de fichiers necessite le mode graphique et une souris.\n");
+
+return;
+
+}
+
+
+int win_x = 2, win_y = 2, win_w = 34, win_h = 20;
+
+
+/* Jusqu'a 12 fichiers listes a l'ecran (au-dela, non affiches -- limite simple). */
+
+char names[12][FILE_NAME_SIZE];
+
+u32 name_count = 0;
+
+
+for (u32 id = 1; id <= MAX_INODES && name_count < 12; id++)
+{
+
+inode* node = inode_get(id);
+
+if (node != 0)
+{
+
+int i = 0;
+
+while (node->name[i] != 0 && i < FILE_NAME_SIZE - 1)
+{
+
+names[name_count][i] = node->name[i];
+
+i++;
+
+}
+
+names[name_count][i] = 0;
+
+name_count++;
+
+}
+
+}
+
+
+int viewing = -1; /* -1 = liste, sinon index dans names[] */
+
+u32 row_x[12], row_y[12], row_w[12], row_h[12];
+
+char* file_content = (void*)0;
+
+
+keyboard_flush();
+
+
+int redraw = 1;
+
+int was_pressed = 0;
+
+
+while (1)
+{
+
+
+if (redraw)
+{
+
+
+console_clear();
+
+
+if (viewing < 0)
+{
+
+gui_draw_window(win_x, win_y, win_w, win_h, "Explorateur de fichiers", 0x1F, (void*)0, (void*)0, (void*)0);
+
+
+if (name_count == 0)
+{
+
+gui_draw_text(win_x + 1, win_y + 2, "(aucun fichier)", 0x1F);
+
+}
+
+
+for (u32 i = 0; i < name_count; i++)
+{
+
+gui_draw_button(win_x + 1, win_y + 2 + (int)i, win_w - 2, 1, names[i], &row_x[i], &row_y[i], &row_w[i], &row_h[i]);
+
+}
+
+
+gui_draw_text(win_x + 1, win_y + win_h - 2, "Cliquez un fichier, Entree pour fermer", 0x1F);
+
+}
+else
+{
+
+gui_draw_window(win_x, win_y, win_w, win_h, names[viewing], 0x1F, (void*)0, (void*)0, (void*)0);
+
+
+file_content = file_read(names[viewing]);
+
+if (file_content != (void*)0)
+{
+
+gui_draw_text(win_x + 1, win_y + 2, file_content, 0x1F);
+
+}
+else
+{
+
+gui_draw_text(win_x + 1, win_y + 2, "(impossible de lire ce fichier)", 0x1F);
+
+}
+
+
+gui_draw_text(win_x + 1, win_y + win_h - 2, "Clic ou Entree pour revenir a la liste", 0x1F);
+
+}
+
+
+redraw = 0;
+
+}
+
+
+s32 mx = mouse_get_x();
+
+s32 my = mouse_get_y();
+
+gui_draw_cursor(mx, my);
+
+
+int now_pressed = mouse_left_pressed();
+
+int clicked = (now_pressed && !was_pressed);
+
+was_pressed = now_pressed;
+
+
+if (clicked)
+{
+
+if (viewing < 0)
+{
+
+for (u32 i = 0; i < name_count; i++)
+{
+
+if (gui_point_in_rect(row_x[i], row_y[i], row_w[i], row_h[i], mx, my))
+{
+
+viewing = (int)i;
+
+redraw = 1;
+
+break;
+
+}
+
+}
+
+}
+else
+{
+
+viewing = -1;
+
+redraw = 1;
+
+}
+
+}
+
+
+if (keyboard_available())
+{
+
+char c = keyboard_getchar();
+
+if (c == '\n')
+{
+
+if (viewing < 0)
+{
+
+break;
+
+}
+
+else
+{
+
+viewing = -1;
+
+redraw = 1;
+
+}
+
+}
+
+}
+
+
+unsigned long frame_start = timer_ticks();
+
+while (timer_ticks() - frame_start < 1)
+{
+}
+
+
+}
+
+
+console_clear();
+
+
+}
+
+
+/*
     Contenu de la fenetre "Session" (statut utilisateur),
     extrait dans son propre helper pour pouvoir etre redessine
     a chaque image de la boucle interactive ci-dessous (etape 5 :
@@ -1212,13 +1831,6 @@ u32 close_y = 0;
 u32 close_size = 0;
 
 
-keyboard_flush();
-
-
-while (1)
-{
-
-
 console_clear();
 
 gui_draw_window(2, 2, 36, 16, "Mikea OS - Session", 0x1F, &close_x, &close_y, &close_size);
@@ -1226,6 +1838,13 @@ gui_draw_window(2, 2, 36, 16, "Mikea OS - Session", 0x1F, &close_x, &close_y, &c
 gui_draw_session_content();
 
 gui_draw_text(5, 14, "Cliquez sur X ou Entree pour fermer", 0x1F);
+
+
+keyboard_flush();
+
+
+while (1)
+{
 
 
 s32 mx = mouse_get_x();
@@ -1259,14 +1878,14 @@ break;
 
 
 /*
-    Cadence de la boucle (~30ms par image a 100Hz) : evite de
-    redessiner la fenetre entiere en boucle a pleine vitesse
-    CPU pour un gain visuel nul.
+    Cadence de la boucle (~10ms par image a 100Hz) : evite de
+    consommer le CPU en boucle a pleine vitesse pour un gain
+    visuel nul.
 */
 
 unsigned long frame_start = timer_ticks();
 
-while (timer_ticks() - frame_start < 3)
+while (timer_ticks() - frame_start < 1)
 {
 }
 
@@ -1351,6 +1970,9 @@ console_write("ls\n");
 console_write("gui\n");
 console_write("gfxstatus\n");
 console_write("mouse\n");
+console_write("install\n");
+console_write("calc\n");
+console_write("files\n");
 console_write("run <name>\n");
 
 
@@ -1574,6 +2196,30 @@ else if(mk_strcmp(command, "mouse") == 0)
 {
 
 cmd_mouse();
+
+}
+
+
+else if(mk_strcmp(command, "install") == 0)
+{
+
+cmd_install();
+
+}
+
+
+else if(mk_strcmp(command, "calc") == 0)
+{
+
+cmd_calc();
+
+}
+
+
+else if(mk_strcmp(command, "files") == 0)
+{
+
+cmd_files();
 
 }
 

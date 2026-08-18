@@ -279,7 +279,8 @@ Le dernier message affiché indique où chercher :
 help        about       version     clear       cpu         mem
 whoami      useradd     userdel     passwd      users       logout
 ps          mpm         mkdir       touch       write       cat
-rm          ls          gui         run
+rm          ls          gui         gfxstatus   mouse       install
+calc        run
 ```
 
 Tapez `help` dans le shell pour la liste à jour avec une courte
@@ -297,6 +298,29 @@ description de chaque commande.
 | Le clavier semble se figer après quelques secondes d'utilisation | Bug corrigé (course rare sur le drapeau IF, voir `kernel/process/thread.c`) — vérifiez que vous utilisez bien la version corrigée. |
 | `root`/`mikea` refusés à l'écran de connexion (« Login incorrect » en boucle) | Bug corrigé : le tampon clavier n'était jamais vidé avant l'écran de connexion — une touche pressée pendant le démarrage (ou lors d'un essai précédent raté) polluait la saisie suivante. Voir `kernel/drivers/keyboard/keyboard.c` (`keyboard_flush()`). Évitez aussi de taper avant que `Mikea OS login:` ne soit affiché. |
 | Redémarrage en boucle juste après l'activation du mode graphique (« Booting from hard disk... » qui revient sans arrêt) | Bug corrigé : les tables de pages ne couvraient que les 64 premiers Mo de RAM, alors que le framebuffer VBE est presque toujours placé bien plus haut en mémoire physique (~3,5-4 Go) — toute écriture dessus déclenchait un triple fault. Les tables de pages couvrent désormais tout l'espace physique 32 bits (4 Go). Si ça persiste malgré une recompilation complète, désactivez temporairement l'activation réelle du mode dans `stage2.asm` (repassez au comportement « détection seule » de l'étape 1) et signalez-le. |
+
+## Installeur
+
+Commande `install` (root uniquement, confirmation `OUI` requise) :
+copie l'image de démarrage du disque **maître** (celui sur lequel le
+système tourne actuellement) vers le disque **esclave** (`disk.img`,
+jusqu'ici utilisé uniquement comme disque de données), avec
+vérification immédiate de chaque secteur écrit (relecture + comparaison
+octet par octet).
+
+**Opération destructive** : le contenu actuel du disque esclave est
+entièrement remplacé.
+
+Pour démarrer sur le disque installé ensuite : inversez l'ordre des
+deux `-drive` dans la commande QEMU (ou changez l'ordre de démarrage
+dans VirtualBox), pour que le disque fraîchement installé passe en
+premier.
+
+```bash
+qemu-system-x86_64 \
+  -drive format=raw,file=build/disk.img \
+  -drive format=raw,file=build/MikeaOS.img
+```
 
 ## Interface graphique (en cours)
 
@@ -346,7 +370,20 @@ minimaliste). Avancement :
   ('X') cliquable dans la barre de titre, en plus de la fermeture au
   clavier (Entrée). Boucle de rendu cadencée (~30 ips) pour éviter de
   saturer le CPU.
-- ⏳ **Étape 6 — Éléments d'interface + style visuel final.**
+- ⏳ **Étape 6 — Éléments d'interface + style visuel final** ✅ :
+  accents de coin façon HUD (chevrons cyan aux quatre coins de la
+  fenêtre), sobre et cohérent avec le reste (pas de néon).
+
+**Feuille de route terminée** : démarrage → mode graphique → souris →
+fenêtre → interaction → style. `gui` affiche désormais une vraie
+fenêtre pixel avec curseur, bouton de fermeture cliquable et accents
+visuels. Pistes naturelles pour aller plus loin, non traitées ici
+(hors scope d'une session de correctifs, chacune est un chantier à
+part entière) : déplacement de fenêtre par glisser-déposer de la
+barre de titre (nécessite un tampon de sauvegarde plus grand pour
+éviter le scintillement pendant le déplacement), plusieurs fenêtres
+simultanées avec gestion de la profondeur (z-order), fond d'écran
+image (les emplacements sont prêts dans `assets/wallpapers/`).
 
 Pourquoi cette prudence : une fois le mode vidéo réellement changé, le
 tampon texte `0xB8000` (utilisé par tout l'affichage actuel : messages

@@ -163,3 +163,88 @@ i++;
 return 0;
 
 }
+
+
+
+/*
+    Correctif (edition de liens echouee : "undefined symbol:
+    memcpy") : Clang genere parfois des appels implicites aux
+    noms standards memcpy/memset/memmove/memcmp pour certains
+    motifs de code (ex. initialisation d'un grand tableau
+    local), meme en mode freestanding (-ffreestanding empeche
+    de supposer que les en-tetes standards sont disponibles,
+    mais n'empeche pas le compilateur de continuer a emettre
+    ces appels comme fonctions integrees implicites). Nos
+    fonctions mk_memcpy() etc. ci-dessus portent un nom
+    different et ne repondent donc pas a ces appels generes
+    par le compilateur -- il faut aussi fournir les noms
+    standards.
+*/
+
+void* memcpy(void* dest, const void* src, u64 len)
+{
+
+return mk_memcpy(dest, src, (u32)len);
+
+}
+
+
+void* memset(void* dest, int value, u64 len)
+{
+
+return mk_memset(dest, value, (u32)len);
+
+}
+
+
+int memcmp(const void* a, const void* b, u64 len)
+{
+
+return mk_memcmp(a, b, (u32)len);
+
+}
+
+
+void* memmove(void* dest, const void* src, u64 len)
+{
+
+u8* d = (u8*)dest;
+
+const u8* s = (const u8*)src;
+
+
+if (d == s || len == 0)
+{
+
+return dest;
+
+}
+
+
+if (d < s)
+{
+
+for (u64 i = 0; i < len; i++)
+{
+
+d[i] = s[i];
+
+}
+
+}
+else
+{
+
+for (u64 i = len; i > 0; i--)
+{
+
+d[i - 1] = s[i - 1];
+
+}
+
+}
+
+
+return dest;
+
+}

@@ -467,3 +467,137 @@ gfx_fill_rect(0, vbe_info->height - pixel_rows, vbe_info->width, pixel_rows, bg)
 
 
 }
+
+
+u32 gfx_bpp()
+{
+
+return vbe_info->bpp;
+
+}
+
+
+void gfx_read_rect(u32 x, u32 y, u32 w, u32 h, u8* buffer)
+{
+
+
+if (!gfx_ready)
+{
+
+return;
+
+}
+
+
+u32 bytes_per_pixel = vbe_info->bpp / 8;
+
+u8* fb = (u8*)(u64)vbe_info->addr;
+
+
+for (u32 row = 0; row < h; row++)
+{
+
+
+if (y + row >= vbe_info->height)
+{
+
+break;
+
+}
+
+
+for (u32 col = 0; col < w; col++)
+{
+
+
+if (x + col >= vbe_info->width)
+{
+
+continue;
+
+}
+
+
+u8* src = fb + ((y + row) * vbe_info->pitch) + ((x + col) * bytes_per_pixel);
+
+u8* dst = buffer + (row * w + col) * bytes_per_pixel;
+
+
+for (u32 b = 0; b < bytes_per_pixel; b++)
+{
+
+dst[b] = src[b];
+
+}
+
+
+}
+
+
+}
+
+
+}
+
+
+void gfx_write_rect(u32 x, u32 y, u32 w, u32 h, const u8* buffer)
+{
+
+
+if (!gfx_ready)
+{
+
+return;
+
+}
+
+
+u32 bytes_per_pixel = vbe_info->bpp / 8;
+
+u8* fb = (u8*)(u64)vbe_info->addr;
+
+
+for (u32 row = 0; row < h; row++)
+{
+
+
+if (y + row >= vbe_info->height)
+{
+
+break;
+
+}
+
+
+for (u32 col = 0; col < w; col++)
+{
+
+
+if (x + col >= vbe_info->width)
+{
+
+continue;
+
+}
+
+
+u8* dst = fb + ((y + row) * vbe_info->pitch) + ((x + col) * bytes_per_pixel);
+
+const u8* src = buffer + (row * w + col) * bytes_per_pixel;
+
+
+for (u32 b = 0; b < bytes_per_pixel; b++)
+{
+
+dst[b] = src[b];
+
+}
+
+
+}
+
+
+}
+
+
+}
