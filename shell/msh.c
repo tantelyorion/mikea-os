@@ -25,6 +25,10 @@
 
 #include "../security/user.h"
 
+#include "../gui/desktop.h"
+
+#include "../kernel/drivers/graphics/graphics.h"
+
 
 
 
@@ -79,6 +83,37 @@ logout_requested = 1;
 }
 
 
+/*
+    Getter "consommateur" : lit le drapeau puis le remet a
+    zero immediatement. Utilise par gui/desktop.c (terminal
+    integre au bureau graphique) pour savoir si la commande
+    "logout" vient d'etre tapee, sans dupliquer la variable
+    static "logout_requested" ci-dessus ni l'exposer
+    directement (elle reste privee a ce fichier). Consommer le
+    drapeau ici plutot que de le laisser trainer evite qu'une
+    ancienne demande de deconnexion, deja traitee, ne soit
+    relue par erreur plus tard (msh_start() le remet aussi a 0
+    en tete de sa boucle, mais mieux vaut ne pas en dependre
+    depuis un autre fichier).
+*/
+
+int shell_logout_was_requested()
+{
+
+if (logout_requested)
+{
+
+logout_requested = 0;
+
+return 1;
+
+}
+
+return 0;
+
+}
+
+
 
 void msh_start()
 {
@@ -116,6 +151,40 @@ logout_requested = 0;
 
 user* logged_in = login_prompt();
 
+
+/*
+    Bureau graphique automatique : des qu'un mode graphique
+    pixel est disponible (voir kernel/drivers/graphics), on
+    lance directement gui/desktop.c apres la connexion --
+    fond d'ecran, barre des taches, icones d'applications --
+    au lieu de l'invite texte "gui"/"calc"/"files" a taper a
+    la main ci-dessous. gui_desktop_run() ne rend la main que
+    lorsque l'utilisateur demande explicitement a se
+    deconnecter (bouton "Deconnexion" ou "logout" dans le
+    terminal integre) : on deconnecte alors reellement le
+    compte et on reboucle vers login_prompt(), exactement
+    comme le fait la boucle texte plus bas pour "logout".
+
+    Sans mode graphique (VBE non detecte au demarrage), ce
+    bloc est ignore et le shell texte ci-dessous reste le
+    seul point d'entree -- degradation gracieuse, comme le
+    font deja individuellement calc/files/settings/gui.
+*/
+
+if (gfx_available())
+{
+
+gui_desktop_run();
+
+
+user_logout();
+
+console_write("\nLogging out...\n\n");
+
+
+continue;
+
+}
 
 
 console_write(

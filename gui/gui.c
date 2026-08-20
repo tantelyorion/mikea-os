@@ -1,5 +1,7 @@
 #include "gui.h"
 
+#include "theme.h"
+
 #include "../kernel/drivers/framebuffer.h"
 
 #include "../kernel/drivers/graphics/graphics.h"
@@ -17,15 +19,20 @@
     et le meme facteur d'echelle (GFX_SCALE=2) que console.c,
     pour que "gui" s'aligne visuellement avec le reste de
     l'affichage.
+
+    Refonte visuelle : l'ancien theme "futuriste" (fond bleu
+    nuit, texte/bordures cyan neon, accents en "L" façon HUD de
+    vaisseau) est remplace par le theme neutre noir/blanc/gris
+    de gui/theme.c -- panneaux "verre depoli" (glassmorphisme
+    via gfx_fill_rect_blend()), ombre portee douce, bordures
+    fines, dans l'esprit macOS/GNOME/Windows/Openbox. Le
+    parametre "color" de gui_draw_box()/gui_draw_window() reste
+    utilise tel quel en mode texte (palette VGA fixe, pas de
+    transparence possible), mais est ignore en mode graphique au
+    profit du theme courant (voir theme_is_dark()).
 */
 
 #define GFX_SCALE 2
-
-#define GUI_GFX_FG GFX_CYAN
-
-#define GUI_GFX_BG 0x1B3A5C
-
-#define GUI_GFX_TITLE_FG GFX_WHITE
 
 
 static void gui_draw_text_gfx(int x, int y, const char* text)
@@ -35,7 +42,7 @@ gfx_draw_text(
 (u32)x * 8 * GFX_SCALE,
 (u32)y * 8 * GFX_SCALE,
 text,
-GUI_GFX_FG,
+theme_text(),
 GFX_SCALE
 );
 
@@ -94,61 +101,30 @@ u32 pw = (u32)width * 8 * GFX_SCALE;
 u32 ph = (u32)height * 8 * GFX_SCALE;
 
 
-gfx_fill_rect(px, py, pw, ph, GUI_GFX_BG);
+/*
+    Ombre portee douce : rectangle sombre a peine visible
+    (22% d'opacite), decale de quelques pixels en bas a
+    droite. Comme le panneau plein est dessine par-dessus
+    juste apres, seul ce petit liseret depasse -- effet
+    d'ombre discret plutot qu'un cadre neon.
+*/
 
-gfx_draw_rect(px, py, pw, ph, GUI_GFX_FG);
-
-if (pw > 2 && ph > 2)
-{
-
-gfx_draw_rect(px + 1, py + 1, pw - 2, ph - 2, GUI_GFX_FG);
-
-}
+gfx_fill_rect_blend(px + 4, py + 4, pw, ph, theme_shadow(), 22);
 
 
 /*
-    Accents de coin (etape 6, habillage visuel) : deux petits
-    traits en "L" a chaque coin, plus longs et plus marques
-    que la bordure fine -- inspires des interfaces HUD de
-    vaisseau, sobre (pas de couleurs vives/neon, juste
-    l'accent cyan deja utilise partout ailleurs).
+    Panneau "verre depoli" : le fond deja affiche transparait
+    legerement au travers de la couleur du theme (voir
+    theme_panel_opacity()), au lieu d'un aplat opaque --
+    c'est le coeur de l'effet glassmorphisme.
 */
 
-u32 accent_len = 16;
-
-if (accent_len * 2 < pw && accent_len * 2 < ph)
-{
+gfx_fill_rect_blend(px, py, pw, ph, theme_panel(), theme_panel_opacity());
 
 
-/* Haut-gauche */
+/* Bordure fine et discrete (pas de double bordure epaisse). */
 
-gfx_fill_rect(px - 2, py - 2, accent_len, 3, GUI_GFX_FG);
-
-gfx_fill_rect(px - 2, py - 2, 3, accent_len, GUI_GFX_FG);
-
-
-/* Haut-droite */
-
-gfx_fill_rect(px + pw - accent_len + 2, py - 2, accent_len, 3, GUI_GFX_FG);
-
-gfx_fill_rect(px + pw - 1, py - 2, 3, accent_len, GUI_GFX_FG);
-
-
-/* Bas-gauche */
-
-gfx_fill_rect(px - 2, py + ph - 1, accent_len, 3, GUI_GFX_FG);
-
-gfx_fill_rect(px - 2, py + ph - accent_len + 2, 3, accent_len, GUI_GFX_FG);
-
-
-/* Bas-droite */
-
-gfx_fill_rect(px + pw - accent_len + 2, py + ph - 1, accent_len, 3, GUI_GFX_FG);
-
-gfx_fill_rect(px + pw - 1, py + ph - accent_len + 2, 3, accent_len, GUI_GFX_FG);
-
-
-}
+gfx_draw_rect(px, py, pw, ph, theme_border());
 
 
 return;
@@ -218,34 +194,48 @@ u32 py = (u32)y * 8 * GFX_SCALE;
 
 u32 pw = (u32)width * 8 * GFX_SCALE;
 
+u32 titlebar_h = 8 * GFX_SCALE + 4;
 
-gfx_fill_rect(px, py, pw, 8 * GFX_SCALE, GUI_GFX_FG);
+
+/*
+    Barre de titre : quasiment opaque (95%), un peu plus
+    marquee que le corps "verre depoli" de la fenetre en
+    dessous -- meme logique que les barres de titre
+    macOS/GNOME/Windows, qui se distinguent legerement du
+    reste de la fenetre sans rompre l'effet de transparence.
+*/
+
+gfx_fill_rect_blend(px, py, pw, titlebar_h, theme_titlebar_bg(), 95);
+
+gfx_draw_hline(px, py + titlebar_h - 1, pw, theme_border());
 
 
 if (title != (void*)0)
 {
 
-gfx_draw_text(px + 8 * GFX_SCALE, py, title, GUI_GFX_TITLE_FG, GFX_SCALE);
+gfx_draw_text(px + 8 * GFX_SCALE, py + 2, title, theme_titlebar_text(), GFX_SCALE);
 
 }
 
 
 /*
-    Bouton de fermeture ('X') : carre dans le coin superieur
-    droit de la barre de titre. Dessine en dernier pour
-    rester au-dessus du reste de la barre de titre.
+    Bouton de fermeture : pastille ronde-carree rouge discrete
+    (meme codage visuel que le "point rouge" macOS/GNOME)
+    avec un "x" fin plutot qu'un bloc plein agressif. Dessine
+    en dernier pour rester au-dessus du reste de la barre de
+    titre.
 */
 
 u32 button_size = 8 * GFX_SCALE;
 
-u32 button_x = px + pw - button_size;
+u32 button_x = px + pw - button_size - 4;
 
-u32 button_y = py;
+u32 button_y = py + (titlebar_h - button_size) / 2;
 
 
-gfx_fill_rect(button_x, button_y, button_size, button_size, 0xB33A3A);
+gfx_fill_rect(button_x, button_y, button_size, button_size, theme_close_bg());
 
-gfx_draw_text(button_x, button_y, "X", GFX_WHITE, GFX_SCALE);
+gfx_draw_text(button_x, button_y, "x", theme_close_symbol(), GFX_SCALE);
 
 
 if (bx != (void*)0) { *bx = button_x; }
@@ -336,6 +326,14 @@ gui_cursor_is_saved = 0;
 }
 
 
+void gui_cursor_reset()
+{
+
+gui_cursor_is_saved = 0;
+
+}
+
+
 void gui_draw_cursor(s32 x, s32 y)
 {
 
@@ -378,12 +376,41 @@ gui_cursor_saved_y = y;
 gui_cursor_is_saved = 1;
 
 
-gfx_color c = GFX_WHITE;
+/*
+    Curseur a deux tons (remplissage clair + fin contour
+    sombre), plutot qu'une seule couleur pleine : un curseur
+    theme_cursor() plein (blanc) devenait quasi invisible sur
+    un fond clair une fois le theme clair applique. Le contour
+    sombre garantit un minimum de contraste quel que soit ce
+    qu'il y a en dessous (fenetre claire, sombre, ou bureau),
+    comme les curseurs systeme habituels. Reste strictement
+    dans la boite GUI_CURSOR_SIZE x GUI_CURSOR_SIZE deja
+    sauvegardee/restauree ci-dessus par gui_cursor_erase().
+*/
+
+gfx_color fill = theme_cursor();
+
+gfx_color outline = theme_cursor_outline();
 
 for (u32 row = 0; row < GUI_CURSOR_SIZE; row++)
 {
 
-gfx_fill_rect((u32)x, (u32)y + row, GUI_CURSOR_SIZE - row, 1, c);
+u32 w = GUI_CURSOR_SIZE - row;
+
+if (w <= 2)
+{
+
+gfx_fill_rect((u32)x, (u32)y + row, w, 1, outline);
+
+continue;
+
+}
+
+gfx_fill_rect((u32)x, (u32)y + row, 1, 1, outline);
+
+gfx_fill_rect((u32)x + 1, (u32)y + row, w - 2, 1, fill);
+
+gfx_fill_rect((u32)x + w - 1, (u32)y + row, 1, 1, outline);
 
 }
 
@@ -451,9 +478,9 @@ u32 pw = (u32)w * 8 * GFX_SCALE;
 u32 ph = (u32)h * 8 * GFX_SCALE;
 
 
-gfx_fill_rect(px, py, pw, ph, 0x2A4A6C);
+gfx_fill_rect(px, py, pw, ph, theme_button_bg());
 
-gfx_draw_rect(px, py, pw, ph, GUI_GFX_FG);
+gfx_draw_rect(px, py, pw, ph, theme_button_border());
 
 
 if (label != (void*)0)
@@ -482,7 +509,7 @@ u32 offset_x = (pw > text_w) ? (pw - text_w) / 2 : 0;
 u32 offset_y = (ph > 8 * GFX_SCALE) ? (ph - 8 * GFX_SCALE) / 2 : 0;
 
 
-gfx_draw_text(px + offset_x, py + offset_y, label, GFX_WHITE, GFX_SCALE);
+gfx_draw_text(px + offset_x, py + offset_y, label, theme_text(), GFX_SCALE);
 
 }
 
@@ -494,5 +521,226 @@ if (out_y != (void*)0) { *out_y = py; }
 if (out_w != (void*)0) { *out_w = pw; }
 
 if (out_h != (void*)0) { *out_h = ph; }
+
+}
+
+
+void gui_draw_field(int x, int y, int w, int h, const char* text, int masked, int focused, u32* out_x, u32* out_y, u32* out_w, u32* out_h)
+{
+
+if (!gfx_available())
+{
+
+if (out_x != (void*)0) { *out_x = 0; }
+
+if (out_y != (void*)0) { *out_y = 0; }
+
+if (out_w != (void*)0) { *out_w = 0; }
+
+if (out_h != (void*)0) { *out_h = 0; }
+
+return;
+
+}
+
+
+u32 px = (u32)x * 8 * GFX_SCALE;
+
+u32 py = (u32)y * 8 * GFX_SCALE;
+
+u32 pw = (u32)w * 8 * GFX_SCALE;
+
+u32 ph = (u32)h * 8 * GFX_SCALE;
+
+
+gfx_fill_rect_blend(px, py, pw, ph, theme_button_bg(), 92);
+
+
+/*
+    Bordure doublee (deux rectangles imbriques) quand le champ
+    a le focus, plutot qu'une simple couleur differente : reste
+    clairement visible meme sur les tres petits ecrans/themes ou
+    la difference de couleur seule serait trop subtile.
+*/
+
+gfx_draw_rect(px, py, pw, ph, focused ? theme_text() : theme_button_border());
+
+if (focused && pw > 2 && ph > 2)
+{
+
+gfx_draw_rect(px + 1, py + 1, pw - 2, ph - 2, theme_text());
+
+}
+
+
+if (text != (void*)0)
+{
+
+char display[48];
+
+int i = 0;
+
+while (text[i] != 0 && i < 46)
+{
+
+display[i] = masked ? '*' : text[i];
+
+i++;
+
+}
+
+display[i] = 0;
+
+
+u32 offset_y = (ph > 8 * GFX_SCALE) ? (ph - 8 * GFX_SCALE) / 2 : 0;
+
+gfx_draw_text(px + 6, py + offset_y, display, theme_text(), GFX_SCALE);
+
+}
+
+
+if (out_x != (void*)0) { *out_x = px; }
+
+if (out_y != (void*)0) { *out_y = py; }
+
+if (out_w != (void*)0) { *out_w = pw; }
+
+if (out_h != (void*)0) { *out_h = ph; }
+
+}
+
+
+int gui_drag_update(
+gui_drag* drag,
+int* win_x, int* win_y,
+int width, int height,
+s32 mouse_x, s32 mouse_y, int mouse_down,
+u32 close_bx, u32 close_by, u32 close_bsize
+)
+{
+
+
+if (!gfx_available())
+{
+
+return 0;
+
+}
+
+
+u32 px = (u32)(*win_x) * 8 * GFX_SCALE;
+
+u32 py = (u32)(*win_y) * 8 * GFX_SCALE;
+
+u32 pw = (u32)width * 8 * GFX_SCALE;
+
+u32 titlebar_h = 8 * GFX_SCALE + 4;
+
+
+if (!drag->active)
+{
+
+
+if (!mouse_down)
+{
+
+return 0;
+
+}
+
+
+/*
+    Demarre un glisser uniquement si l'appui initial tombe
+    dans la barre de titre (pas n'importe ou dans la
+    fenetre -- cliquer le contenu ne doit pas la deplacer,
+    comme sur n'importe quel bureau habituel) ET en dehors
+    du bouton de fermeture (sinon fermer la fenetre
+    deplacerait aussi la fenetre juste avant qu'elle ne se
+    ferme).
+*/
+
+if (!gui_point_in_rect(px, py, pw, titlebar_h, mouse_x, mouse_y))
+{
+
+return 0;
+
+}
+
+
+if (gui_point_in_rect(close_bx, close_by, close_bsize, close_bsize, mouse_x, mouse_y))
+{
+
+return 0;
+
+}
+
+
+drag->active = 1;
+
+drag->grab_offset_x = mouse_x - (s32)px;
+
+drag->grab_offset_y = mouse_y - (s32)py;
+
+return 0;
+
+}
+
+
+if (!mouse_down)
+{
+
+drag->active = 0;
+
+return 0;
+
+}
+
+
+s32 new_px = mouse_x - drag->grab_offset_x;
+
+s32 new_py = mouse_y - drag->grab_offset_y;
+
+
+int new_win_x = new_px / (8 * GFX_SCALE);
+
+int new_win_y = new_py / (8 * GFX_SCALE);
+
+
+/*
+    Bornage a l'ecran : une fenetre glissee jusqu'au bord ne
+    doit ni disparaitre hors champ, ni pouvoir etre "perdue"
+    derriere un bord sans bouton de fermeture accessible. Un
+    minimum de 2 cellules de la barre de titre reste toujours
+    visible en haut/a gauche, et la fenetre entiere reste sur
+    l'ecran a droite/en bas.
+*/
+
+int cols = (int)(gfx_width() / (8 * GFX_SCALE));
+
+int rows = (int)(gfx_height() / (8 * GFX_SCALE));
+
+
+if (new_win_x < 0) { new_win_x = 0; }
+
+if (new_win_y < 0) { new_win_y = 0; }
+
+if (new_win_x + width > cols) { new_win_x = cols - width; if (new_win_x < 0) { new_win_x = 0; } }
+
+if (new_win_y + height > rows) { new_win_y = rows - height; if (new_win_y < 0) { new_win_y = 0; } }
+
+
+if (new_win_x == *win_x && new_win_y == *win_y)
+{
+
+return 0;
+
+}
+
+
+*win_x = new_win_x;
+
+*win_y = new_win_y;
+
+return 1;
 
 }

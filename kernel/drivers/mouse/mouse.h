@@ -11,6 +11,23 @@
     signale via IRQ12.
 */
 
+/*
+    Configure une resolution/taux d'echantillonnage materiels
+    eleves (0xE8, 0xF3) puis active le rapport de mouvement.
+    mouse_handle_irq() applique en plus une sensibilite/
+    acceleration logicielle (voir MOUSE_BASE_SENSITIVITY dans
+    mouse.c) : le curseur se deplace nettement plus par
+    deplacement physique qu'avec les reglages PS/2 par defaut.
+
+    A savoir cote emulateur : QEMU (voir scripts/run.sh) presente
+    par defaut une souris PS/2 "relative" -- la fenetre QEMU doit
+    etre cliquee une fois pour "capturer" la souris (le curseur
+    hote disparait), et Ctrl+Alt (touche affichee en bas de la
+    fenetre QEMU) la relache. Tant qu'elle n'est pas capturee, les
+    mouvements ne sont pas transmis a l'OS invite, ce qui peut
+    donner la meme impression qu'un curseur qui ne repond pas.
+*/
+
 void mouse_init();
 
 

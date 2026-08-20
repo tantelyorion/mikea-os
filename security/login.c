@@ -1,5 +1,9 @@
 #include "login.h"
 
+#include "../gui/login_screen.h"
+
+#include "../kernel/drivers/graphics/graphics.h"
+
 
 
 /*
@@ -47,6 +51,22 @@ void keyboard_flush();
 
 user* login_prompt()
 {
+
+
+/*
+    Ecran de connexion graphique (gui/login_screen.c) des
+    qu'un mode graphique est disponible, au lieu de l'invite
+    texte "Mikea OS login:"/"Password:" ci-dessous -- qui
+    reste le seul recours si aucun mode graphique n'a ete
+    detecte au demarrage (voir boot/loader/stage2.asm).
+*/
+
+if (gfx_available())
+{
+
+return gui_login_screen();
+
+}
 
 
 char username[32];

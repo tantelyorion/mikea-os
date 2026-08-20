@@ -540,6 +540,130 @@ dst[b] = src[b];
 }
 
 
+/*
+    Inverse approximatif de gfx_pack_color() : reconstruit une
+    composante 8 bits a partir des bits reellement stockes dans
+    le pixel natif. Pour les profondeurs 24/32 bits que ce
+    module accepte (voir graphics_init()), chaque champ RGB fait
+    generalement 8 bits pile, donc ce n'est pas une simple
+    approximation mais une reconstruction exacte.
+*/
+
+static u32 gfx_unpack_component(u32 packed, u8 field_position, u8 mask_size)
+{
+
+u32 raw = (packed >> field_position) & ((1u << mask_size) - 1u);
+
+return raw << (8 - mask_size);
+
+}
+
+
+void gfx_fill_rect_blend(u32 x, u32 y, u32 w, u32 h, gfx_color tint, u32 alpha_percent)
+{
+
+
+if (!gfx_ready)
+{
+
+return;
+
+}
+
+
+if (alpha_percent > 100)
+{
+
+alpha_percent = 100;
+
+}
+
+
+u32 tint_r = (tint >> 16) & 0xFF;
+
+u32 tint_g = (tint >> 8) & 0xFF;
+
+u32 tint_b = tint & 0xFF;
+
+
+u32 bytes_per_pixel = vbe_info->bpp / 8;
+
+u8* fb = (u8*)(u64)vbe_info->addr;
+
+
+for (u32 row = 0; row < h; row++)
+{
+
+
+if (y + row >= vbe_info->height)
+{
+
+break;
+
+}
+
+
+for (u32 col = 0; col < w; col++)
+{
+
+
+if (x + col >= vbe_info->width)
+{
+
+continue;
+
+}
+
+
+u8* pixel = fb + ((y + row) * vbe_info->pitch) + ((x + col) * bytes_per_pixel);
+
+
+u32 existing = pixel[0] | (pixel[1] << 8) | (pixel[2] << 16);
+
+
+u32 bg_r = gfx_unpack_component(existing, vbe_info->red_field_position, vbe_info->red_mask_size);
+
+u32 bg_g = gfx_unpack_component(existing, vbe_info->green_field_position, vbe_info->green_mask_size);
+
+u32 bg_b = gfx_unpack_component(existing, vbe_info->blue_field_position, vbe_info->blue_mask_size);
+
+
+u32 out_r = (bg_r * (100 - alpha_percent) + tint_r * alpha_percent) / 100;
+
+u32 out_g = (bg_g * (100 - alpha_percent) + tint_g * alpha_percent) / 100;
+
+u32 out_b = (bg_b * (100 - alpha_percent) + tint_b * alpha_percent) / 100;
+
+
+gfx_color blended = (out_r << 16) | (out_g << 8) | out_b;
+
+u32 packed = gfx_pack_color(blended);
+
+
+pixel[0] = (u8)(packed & 0xFF);
+
+pixel[1] = (u8)((packed >> 8) & 0xFF);
+
+pixel[2] = (u8)((packed >> 16) & 0xFF);
+
+
+if (vbe_info->bpp == 32)
+{
+
+pixel[3] = 0;
+
+}
+
+
+}
+
+
+}
+
+
+}
+
+
 void gfx_write_rect(u32 x, u32 y, u32 w, u32 h, const u8* buffer)
 {
 

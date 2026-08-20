@@ -110,6 +110,27 @@ void gfx_read_rect(u32 x, u32 y, u32 w, u32 h, u8* buffer);
 void gfx_write_rect(u32 x, u32 y, u32 w, u32 h, const u8* buffer);
 
 
+/*
+    Remplit un rectangle en melangeant "tint" avec ce qui est
+    deja affiche a l'ecran a cet endroit, au lieu de l'ecraser
+    completement -- base du glassmorphisme ("verre depoli") :
+    les panneaux de fenetre laissent transparaitre le fond en
+    dessous plutot que d'etre plaques en couleur pleine.
+
+    "alpha_percent" va de 0 (fond existant inchange, tint
+    invisible) a 100 (identique a gfx_fill_rect(), tint plein).
+    Valeurs hors bornes ramenees a l'interieur de [0, 100].
+
+    Lit et ecrit pixel par pixel directement dans le
+    framebuffer (pas de tampon intermediaire) : contrairement a
+    gui_draw_cursor() (10x10, tampon fixe raisonnable), une
+    fenetre peut faire des centaines de pixels de cote --
+    beaucoup trop pour un tampon sur la pile du noyau.
+*/
+
+void gfx_fill_rect_blend(u32 x, u32 y, u32 w, u32 h, gfx_color tint, u32 alpha_percent);
+
+
 u32 gfx_bpp();
 
 

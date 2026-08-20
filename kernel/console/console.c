@@ -4,6 +4,10 @@
 
 #include "../drivers/graphics/graphics.h"
 
+#include "../../gui/theme.h"
+
+#include "../../gui/gui.h"
+
 
 
 static int cursor_x=0;
@@ -30,9 +34,17 @@ static int cursor_y=0;
 
 #define GFX_SCALE 2
 
-#define GFX_FG GFX_CYAN
+/*
+    Anciennement des macros fixes (GFX_CYAN sur GFX_DARKBLUE,
+    theme "futuriste"). Deviennent des fonctions vers gui/theme.c
+    pour suivre le theme clair/sombre courant (voir
+    theme_toggle_dark_mode(), apps/settings/settings.c) au lieu
+    d'une seule palette figee au demarrage.
+*/
 
-#define GFX_BG GFX_DARKBLUE
+#define GFX_FG (theme_text())
+
+#define GFX_BG (theme_desktop_bg())
 
 
 static u32 gfx_cols()
@@ -185,7 +197,7 @@ fb_put(
 cursor_x,
 cursor_y,
 *text,
-0x0F
+theme_text_attr()
 );
 
 
@@ -309,7 +321,7 @@ fb_put(
 cursor_x,
 cursor_y,
 ' ',
-0x0F
+theme_text_attr()
 );
 
 }
@@ -324,6 +336,20 @@ if (gfx_available())
 {
 
 gfx_clear(GFX_BG);
+
+
+/*
+    Correctif (residus visuels du curseur souris) : l'ecran
+    entier vient d'etre efface, donc tout ce que
+    gui_draw_cursor() avait sauvegarde pour restaurer le fond
+    sous le curseur (voir gui/gui.c) ne correspond plus a
+    rien -- sans cette ligne, le PREMIER appel a
+    gui_draw_cursor() apres un console_clear() repeindrait un
+    bloc de pixels perimes ("fantome" a l'ancienne position du
+    curseur, ex. en passant d'une application GUI a une autre).
+*/
+
+gui_cursor_reset();
 
 cursor_x = 0;
 

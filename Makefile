@@ -34,10 +34,36 @@ ASM = nasm
 # LD=x86_64-elf-ld OBJCOPY=x86_64-elf-objcopy") pour qui compile
 # depuis un hote d'une autre architecture (ex. Apple Silicon/ARM) et
 # dispose donc d'un vrai compilateur croise.
+#
+# Correctif (echec "cc: No such file or directory" sous MinGW/Git
+# Bash sur Windows, ou tout hote sans binaire "cc") : "CC ?= gcc"
+# NE PROTEGE PAS contre ce cas. GNU Make predefinit CC="cc" via ses
+# regles implicites AVANT meme de lire ce Makefile, avec
+# origin(CC) = "default" -- et "?=" ne fait "prendre la valeur que
+# si la variable n'est pas deja definie", ce qui est deja le cas
+# ici (elle vaut "cc", juste pas via une affectation explicite de ce
+# fichier). Le Makefile utilisait donc silencieusement le "cc" de
+# Make, jamais le "gcc" ecrit ci-dessous -- inoffensif sur les
+# systemes ou "cc" est un alias de "gcc" (la plupart des distros
+# Linux), mais en erreur des qu'aucun binaire "cc" n'existe (MinGW/
+# Git Bash sous Windows : seul "gcc.exe" y est present). On verifie
+# explicitement l'origine de la variable : si elle vient encore des
+# regles par defaut de Make (personne n'a rien precise), on la fixe
+# nous-memes a "gcc" ; si l'utilisateur l'a fournie sur la ligne de
+# commande ou via l'environnement (ex. CC=x86_64-elf-gcc), on la
+# laisse intacte. Meme raisonnement pour LD (Make predefinit
+# egalement LD="ld", donc "LD ?= ld" avait la meme faille -- sans
+# consequence ici puisque la valeur voulue est la meme, mais corrige
+# par souci de coherence/robustesse). OBJCOPY n'est pas une variable
+# implicite de Make : "OBJCOPY ?= objcopy" n'a jamais eu ce probleme.
 
-CC ?= gcc
+ifeq ($(origin CC),default)
+CC := gcc
+endif
 
-LD ?= ld
+ifeq ($(origin LD),default)
+LD := ld
+endif
 
 OBJCOPY ?= objcopy
 
@@ -53,12 +79,35 @@ OBJCOPY ?= objcopy
 # objcopy GNU, dont "-O binary"), cela permet de compiler ce noyau
 # avec une installation LLVM/Clang standard, meme sur un hote qui
 # n'est PAS x86_64, sans jamais avoir a construire ou telecharger
-# un compilateur croise "x86_64-elf-gcc" dedie. TARGET_FLAG est
-# vide par defaut (inutile avec gcc/clang natif sur un hote deja
-# x86_64) ; a renseigner uniquement avec Clang sur un hote d'une
-# autre architecture, ex. :
-#   make CC=clang LD=ld.lld OBJCOPY=llvm-objcopy \
-#        TARGET_FLAG=--target=x86_64-elf
+# un compilateur croise "x86_64-elf-gcc" dedie.
+#
+# Correctif (echec de link/format sur Windows avec Clang) : la
+# phrase precedente ("TARGET_FLAG utile seulement sur un hote d'une
+# autre architecture") etait incomplete. Le probleme n'est PAS
+# l'architecture CPU (un PC Windows est deja x86_64) mais le FORMAT
+# D'OBJET par defaut de l'hote : l'installateur LLVM officiel pour
+# Windows fait cibler a "clang", par defaut, le triplet natif
+# Windows (x86_64-pc-windows-msvc) -- qui produit des objets COFF
+# (.obj), incompatibles avec les objets ELF64 produits par nasm
+# (voir ASM_FLAGS, "-f elf64" plus bas) et attendus par ld.lld/
+# llvm-objcopy. Meme chose sur macOS (format Mach-O par defaut).
+# Sans --target=x86_64-elf explicite, la compilation C reussit
+# silencieusement mais l'edition de liens echoue (formats d'objets
+# incompatibles entre l'assembleur et le compilateur). On detecte
+# donc ici Windows ($OS, variable d'environnement standard) et
+# macOS (uname -s = Darwin) et on force alors --target=x86_64-elf
+# par defaut des que CC contient "clang" -- un TARGET_FLAG fourni
+# explicitement sur la ligne de commande reste toujours prioritaire.
+
+ifneq (,$(findstring clang,$(CC)))
+ifeq ($(TARGET_FLAG),)
+ifeq ($(OS),Windows_NT)
+TARGET_FLAG := --target=x86_64-elf
+else ifeq ($(shell uname -s 2>/dev/null),Darwin)
+TARGET_FLAG := --target=x86_64-elf
+endif
+endif
+endif
 
 TARGET_FLAG ?=
 
@@ -159,7 +208,7 @@ ISR_STUBS_OBJ = $(OBJDIR)/isr_stubs.o
 # utilisateur au format MKX, distincts du noyau (a
 # construire separement avec le futur outil mkx). sdk/ est
 # uniquement compose de headers (pas de .c a compiler).
-C_SOURCES = $(shell find kernel filesystem shell security packages mkx libc gui boot/installer -name "*.c" 2>/dev/null)
+C_SOURCES = $(shell find kernel filesystem shell security packages mkx libc gui boot/installer apps -name "*.c" 2>/dev/null)
 
 C_OBJECTS = $(patsubst %.c,$(OBJDIR)/%.o,$(C_SOURCES))
 

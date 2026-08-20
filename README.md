@@ -106,7 +106,10 @@ mkx/             Format d'exécutable maison : format, chargeur, runtime
 libc/            Fonctions chaîne minimales (memcpy, strcmp...)
 gui/             Fenêtres en mode texte VGA
 sdk/             En-tête pour applications tierces (mikea_sdk.h)
-apps/            Exemple d'application (hello) — pas encore compilé
+apps/            Applications systeme par defaut (calculator/, file_manager/,
+                 session/, settings/ -- compilees dans le noyau, voir la
+                 section "Applications systeme" plus bas) + hello/ (exemple
+                 au format .mkx separe, pas encore compile)
 assets/          Icônes/polices/fond d'écran réservés pour un futur pilote graphique
 include/         Types de base partagés (u8/u16/u32/u64...)
 demo-host/       Bac à sable : compile certains modules (gui, console...) avec
