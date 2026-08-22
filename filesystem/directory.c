@@ -69,7 +69,8 @@ return check_permission((int)u->id, permission);
 */
 
 int directory_create(
-char* name
+char* name,
+char* parent
 )
 {
 
@@ -100,7 +101,7 @@ return 0;
 }
 
 
-inode* node = inode_create(name);
+inode* node = inode_create_ex(name, parent, 1);
 
 
 if(node == 0)
@@ -112,6 +113,99 @@ return 0;
 
 
 return 1;
+
+
+}
+
+
+
+u32 directory_list_children(
+char* parent,
+char out_names[][FILE_NAME_SIZE],
+int* out_is_dir,
+u32 max_count
+)
+{
+
+
+u32 count = 0;
+
+
+for(u32 id = 1; id <= MAX_INODES && count < max_count; id++)
+{
+
+
+inode* node = inode_get(id);
+
+
+if(node == 0 || node->deleted)
+{
+
+continue;
+
+}
+
+
+/*
+    Comparaison manuelle (pas de mk_strcmp ici : ce fichier
+    n'inclut pas libc/string.h, voir la meme approche
+    caractere-par-caractere dans shell/msh.c) entre le
+    parent demande et celui de l'inode.
+*/
+
+int same_parent = 1;
+
+u32 p = 0;
+
+while(parent[p] || node->parent[p])
+{
+
+if(parent[p] != node->parent[p])
+{
+
+same_parent = 0;
+
+break;
+
+}
+
+p++;
+
+}
+
+
+if(!same_parent)
+{
+
+continue;
+
+}
+
+
+u32 j = 0;
+
+while(node->name[j] && j < FILE_NAME_SIZE - 1)
+{
+
+out_names[count][j] = node->name[j];
+
+j++;
+
+}
+
+out_names[count][j] = 0;
+
+
+out_is_dir[count] = node->is_directory;
+
+
+count++;
+
+
+}
+
+
+return count;
 
 
 }

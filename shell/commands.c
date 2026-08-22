@@ -1,5 +1,7 @@
 #include "commands.h"
 
+#include "../kernel/drivers/power/power.h"
+
 #include "msh.h"
 
 #include "../libc/string.h"
@@ -616,7 +618,7 @@ return;
 }
 
 
-if(directory_create(name))
+if(directory_create(name, ""))
 {
 
 console_write("Directory created\n");
@@ -794,7 +796,16 @@ for(u32 id = 1; id <= MAX_INODES; id++)
 
 inode* node = inode_get(id);
 
-if(node != 0)
+/*
+    Correctif (fichiers "supprimes" encore listes) : sans ce
+    filtre, un fichier deplace vers la corbeille (voir
+    filesystem/file.c, file_trash()) continuait d'apparaitre
+    ici normalement -- inode_get() ne filtre que sur "used",
+    pas sur "deleted". Utilisez "trashls" pour voir le
+    contenu de la corbeille.
+*/
+
+if(node != 0 && !node->deleted)
 {
 
 console_write("  ");
@@ -1160,6 +1171,46 @@ console_write("Installation echouee -- voir le message d'erreur ci-dessus.\n");
 
 
 
+static void cmd_mv(
+char* args
+)
+{
+
+
+char old_name[32];
+
+char new_name[32];
+
+
+if(next_token(old_name, sizeof(old_name), &args) == 0
+|| next_token(new_name, sizeof(new_name), &args) == 0)
+{
+
+console_write("Usage: mv <old_name> <new_name>\n");
+
+return;
+
+}
+
+
+if(file_rename(old_name, new_name))
+{
+
+console_write("File renamed\n");
+
+}
+else
+{
+
+console_write("File not found, name already used, or permission denied\n");
+
+}
+
+
+}
+
+
+
 static void cmd_rm(
 char* args
 )
@@ -1179,6 +1230,13 @@ return;
 }
 
 
+/*
+    "rm" reste une suppression IMMEDIATE et definitive (meme
+    semantique que le "rm" Unix, pour ne pas changer par
+    surprise le comportement d'une commande deja existante) --
+    voir "trash" ci-dessous pour une suppression recuperable.
+*/
+
 if(file_delete(name))
 {
 
@@ -1191,6 +1249,196 @@ else
 console_write("File not found or permission denied\n");
 
 }
+
+
+}
+
+
+
+/*
+    ====================================================
+    Corbeille (voir filesystem/file.c)
+    ====================================================
+
+    Contrairement a "rm" ci-dessus (suppression immediate et
+    definitive), "trash" deplace un fichier vers la corbeille :
+    recuperable par "restore" tant que "emptytrash" n'a pas ete
+    lancee. Meme fonctionnalite que le bouton "Supprimer" de
+    l'explorateur graphique (apps/file_manager/file_manager.c),
+    exposee ici en ligne de commande pour rester coherente avec
+    le reste du shell (chaque action de fichier a deja son
+    equivalent "rm"/"cat"/"touch").
+*/
+
+
+static void cmd_trash(
+char* args
+)
+{
+
+
+char name[32];
+
+
+if(next_token(name, sizeof(name), &args) == 0)
+{
+
+console_write("Usage: trash <name>\n");
+
+return;
+
+}
+
+
+if(file_trash(name))
+{
+
+console_write("File moved to trash\n");
+
+}
+else
+{
+
+console_write("File not found, already in trash, or permission denied\n");
+
+}
+
+
+}
+
+
+
+static void cmd_restore(
+char* args
+)
+{
+
+
+char name[32];
+
+
+if(next_token(name, sizeof(name), &args) == 0)
+{
+
+console_write("Usage: restore <name>\n");
+
+return;
+
+}
+
+
+if(file_restore(name))
+{
+
+console_write("File restored\n");
+
+}
+else
+{
+
+console_write("File not found, not in trash, or permission denied\n");
+
+}
+
+
+}
+
+
+
+static void cmd_trashls()
+{
+
+
+u32 count = 0;
+
+
+for(u32 id = 1; id <= MAX_INODES; id++)
+{
+
+inode* node = inode_get(id);
+
+if(node != 0 && node->deleted)
+{
+
+console_write("  ");
+
+console_write(node->name);
+
+console_write("\n");
+
+count++;
+
+}
+
+}
+
+
+if(count == 0)
+{
+
+console_write("Trash is empty\n");
+
+}
+
+
+}
+
+
+
+static void cmd_emptytrash()
+{
+
+
+u32 removed = file_empty_trash();
+
+
+char count_str[12];
+
+int i = 0;
+
+if(removed == 0)
+{
+
+count_str[i++] = '0';
+
+}
+else
+{
+
+u32 v = removed;
+
+char tmp[12];
+
+int t = 0;
+
+while(v > 0)
+{
+
+tmp[t++] = (char)('0' + (v % 10));
+
+v /= 10;
+
+}
+
+while(t > 0)
+{
+
+t--;
+
+count_str[i++] = tmp[t];
+
+}
+
+}
+
+count_str[i] = 0;
+
+
+console_write("Trash emptied (");
+
+console_write(count_str);
+
+console_write(" file(s) permanently deleted)\n");
 
 
 }
@@ -1226,6 +1474,11 @@ console_write("touch <name>\n");
 console_write("write <name> <text>\n");
 console_write("cat <name>\n");
 console_write("rm <name>\n");
+console_write("mv <old_name> <new_name>\n");
+console_write("trash <name>\n");
+console_write("restore <name>\n");
+console_write("trashls\n");
+console_write("emptytrash\n");
 console_write("ls\n");
 console_write("gui\n");
 console_write("gfxstatus\n");
@@ -1235,6 +1488,8 @@ console_write("calc\n");
 console_write("files\n");
 console_write("settings\n");
 console_write("run <name>\n");
+console_write("reboot\n");
+console_write("shutdown\n");
 
 
 }
@@ -1505,6 +1760,62 @@ else if(mk_strncmp(command, "rm ", 3) == 0)
 {
 
 cmd_rm(command + 3);
+
+}
+
+
+else if(mk_strncmp(command, "mv ", 3) == 0)
+{
+
+cmd_mv(command + 3);
+
+}
+
+
+else if(mk_strncmp(command, "trash ", 6) == 0)
+{
+
+cmd_trash(command + 6);
+
+}
+
+
+else if(mk_strncmp(command, "restore ", 8) == 0)
+{
+
+cmd_restore(command + 8);
+
+}
+
+
+else if(mk_strcmp(command, "trashls") == 0)
+{
+
+cmd_trashls();
+
+}
+
+
+else if(mk_strcmp(command, "emptytrash") == 0)
+{
+
+cmd_emptytrash();
+
+}
+
+
+else if(mk_strcmp(command, "reboot") == 0)
+{
+
+power_reboot();
+
+}
+
+
+else if(mk_strcmp(command, "shutdown") == 0)
+{
+
+power_shutdown();
 
 }
 

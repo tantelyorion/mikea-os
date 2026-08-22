@@ -3,6 +3,8 @@
 #include "../../gui/gui.h"
 
 #include "../../gui/theme.h"
+#include "../../gui/desktop.h"
+#include "../../gui/window.h"
 #include "../../kernel/drivers/graphics/graphics.h"
 #include "../../kernel/drivers/mouse/mouse.h"
 
@@ -13,6 +15,9 @@ void keyboard_flush();
 int keyboard_available();
 char keyboard_getchar();
 unsigned long timer_ticks();
+
+
+#define GFX_SCALE 2
 
 
 static void write_int_buf(int value, char* out)
@@ -89,25 +94,36 @@ static const char* CALC_LABELS[4][4] = {
 
 /*
     Redessine toute la fenetre (cadre, affichage, grille de
-    touches) -- appelee au premier affichage ET a chaque fois
-    que la fenetre est deplacee par glisser-deposer (voir
-    gui_drag_update(), gui/gui.c), puisque win_x/win_y changent
-    alors et que tout doit reapparaitre a la nouvelle position.
-    Recalcule aussi les zones de clic (bouton de fermeture +
-    grille), puisqu'elles dependent elles aussi de win_x/win_y.
+    touches) -- appelee au premier affichage, apres un
+    deplacement/redimensionnement, ET a chaque fois que cette
+    fenetre regagne le focus (voir gui/window.h : sa reduction/
+    restauration n'efface rien, mais l'ecran affiche entre-temps
+    autre chose, donc tout redessiner est necessaire des le
+    retour).
+
+    Le bureau (fond + barre des taches, voir
+    desktop_render_backdrop()) est redessine derriere la
+    fenetre a chaque fois plutot qu'un simple console_clear().
 */
 
 static void calc_draw(
-int win_x, int win_y, int win_w, int win_h,
+int win_x, int win_y, int win_w, int win_h, int maximized,
 const char* display,
 u32 btn_x[4][4], u32 btn_y[4][4], u32 btn_w[4][4], u32 btn_h[4][4],
-u32* close_bx, u32* close_by, u32* close_bsize
+u32* close_bx, u32* close_by, u32* close_bsize,
+u32* max_bx, u32* max_by, u32* max_bsize,
+u32* min_bx, u32* min_by, u32* min_bsize
 )
 {
 
-console_clear();
+desktop_render_backdrop();
 
-gui_draw_window(win_x, win_y, win_w, win_h, "Calculatrice", theme_text_attr(), close_bx, close_by, close_bsize);
+gui_draw_window(
+win_x, win_y, win_w, win_h, "Calculatrice", theme_text_attr(),
+close_bx, close_by, close_bsize,
+max_bx, max_by, max_bsize, maximized,
+min_bx, min_by, min_bsize
+);
 
 gui_draw_button(win_x + 1, win_y + 2, win_w - 2, 3, display, (void*)0, (void*)0, (void*)0, (void*)0);
 
@@ -129,8 +145,6 @@ gui_draw_button(bx, by, 4, 2, CALC_LABELS[row][col], &btn_x[row][col], &btn_y[ro
 }
 
 
-gui_draw_text(win_x + 1, win_y + win_h - 2, "X pour fermer -- barre de titre pour deplacer", theme_text_attr());
-
 }
 
 
@@ -148,7 +162,29 @@ return;
 }
 
 
+/*
+    Le bureau (gui/desktop.c) a deja cree ce thread et lui a
+    deja donne le focus (voir gui_window_open()) : on recupere
+    juste notre numero de fenetre pour pouvoir ceder/reprendre
+    le focus nous-memes ensuite (reduire, fermer).
+*/
+
+int slot = gui_window_claim_slot();
+
+if (slot < 0)
+{
+
+return;
+
+}
+
+
 int win_x = 2, win_y = 2, win_w = 22, win_h = 20;
+
+
+int maximized = 0;
+
+int saved_x = win_x, saved_y = win_y, saved_w = win_w, saved_h = win_h;
 
 
 int current_value = 0;
@@ -167,14 +203,14 @@ write_int_buf(current_value, display);
 
 u32 btn_x[4][4], btn_y[4][4], btn_w[4][4], btn_h[4][4];
 
-u32 close_bx, close_by, close_bsize;
+u32 close_bx = 0, close_by = 0, close_bsize = 0;
+
+u32 max_bx = 0, max_by = 0, max_bsize = 0;
+
+u32 min_bx = 0, min_by = 0, min_bsize = 0;
 
 
-calc_draw(win_x, win_y, win_w, win_h, display, btn_x, btn_y, btn_w, btn_h, &close_bx, &close_by, &close_bsize);
-
-
-keyboard_flush();
-
+int redraw = 1;
 
 int was_pressed = 0;
 
@@ -185,6 +221,48 @@ drag.active = 0;
 
 while (1)
 {
+
+
+/*
+    Jeton de focus (voir gui/window.h) : cette fenetre peut
+    exister sans etre visible (reduite, ou une autre fenetre
+    a le focus) -- dans ce cas, ne rien dessiner ni lire
+    la souris/le clavier, juste attendre. "redraw = 1" est
+    pose des maintenant pour forcer un redessin complet des
+    que le focus revient.
+*/
+
+if (!gui_window_has_focus(slot))
+{
+
+redraw = 1;
+
+gui_window_idle();
+
+continue;
+
+}
+
+
+if (redraw)
+{
+
+calc_draw(win_x, win_y, win_w, win_h, maximized, display, btn_x, btn_y, btn_w, btn_h, &close_bx, &close_by, &close_bsize, &max_bx, &max_by, &max_bsize, &min_bx, &min_by, &min_bsize);
+
+/*
+    Meme precaution que gui/desktop.c a la reprise du
+    focus : capturer l'etat REEL du bouton plutot que de
+    supposer qu'il est relache, pour ne pas confondre un
+    clic deja en cours (ex. sur le bouton de restauration
+    depuis la barre des taches) avec un nouveau clic dans
+    cette fenetre.
+*/
+
+was_pressed = mouse_left_pressed();
+
+redraw = 0;
+
+}
 
 
 s32 mx = mouse_get_x();
@@ -203,16 +281,14 @@ was_pressed = now_pressed;
 
 /*
     Glisser-deposer par la barre de titre (voir gui.h) : a
-    tester avant les clics sur les touches, sinon un
-    glisser commencant sur la barre de titre pourrait aussi
-    etre lu comme un clic sur une touche situee a la meme
-    position ecran apres deplacement.
+    tester avant les clics sur les touches. Desactive en
+    plein ecran (comme sur un bureau habituel).
 */
 
-if (gui_drag_update(&drag, &win_x, &win_y, win_w, win_h, mx, my, now_pressed, close_bx, close_by, close_bsize))
+if (!maximized && gui_drag_update(&drag, &win_x, &win_y, win_w, win_h, mx, my, now_pressed, close_bx, close_by, close_bsize))
 {
 
-calc_draw(win_x, win_y, win_w, win_h, display, btn_x, btn_y, btn_w, btn_h, &close_bx, &close_by, &close_bsize);
+calc_draw(win_x, win_y, win_w, win_h, maximized, display, btn_x, btn_y, btn_w, btn_h, &close_bx, &close_by, &close_bsize, &max_bx, &max_by, &max_bsize, &min_bx, &min_by, &min_bsize);
 
 gui_cursor_reset();
 
@@ -222,12 +298,66 @@ gui_cursor_reset();
 if (clicked && gui_point_in_rect(close_bx, close_by, close_bsize, close_bsize, mx, my))
 {
 
+gui_cursor_erase();
+
+gui_window_close(slot);
+
 break;
 
 }
 
 
-if (clicked && !drag.active)
+else if (clicked && gui_point_in_rect(min_bx, min_by, min_bsize, min_bsize, mx, my))
+{
+
+gui_cursor_erase();
+
+gui_window_minimize(slot);
+
+continue;
+
+}
+
+
+else if (clicked && gui_point_in_rect(max_bx, max_by, max_bsize, max_bsize, mx, my))
+{
+
+if (!maximized)
+{
+
+saved_x = win_x; saved_y = win_y; saved_w = win_w; saved_h = win_h;
+
+win_x = 0;
+
+win_y = 0;
+
+win_w = (int)(gfx_width() / (8 * GFX_SCALE));
+
+win_h = (int)(gfx_height() / (8 * GFX_SCALE)) - 2;
+
+maximized = 1;
+
+}
+else
+{
+
+win_x = saved_x; win_y = saved_y; win_w = saved_w; win_h = saved_h;
+
+maximized = 0;
+
+}
+
+
+calc_draw(win_x, win_y, win_w, win_h, maximized, display, btn_x, btn_y, btn_w, btn_h, &close_bx, &close_by, &close_bsize, &max_bx, &max_by, &max_bsize, &min_bx, &min_by, &min_bsize);
+
+gui_cursor_reset();
+
+was_pressed = 0;
+
+}
+
+
+else if (clicked && !drag.active)
 {
 
 
@@ -337,6 +467,10 @@ char c = keyboard_getchar();
 if (c == '\n')
 {
 
+gui_cursor_erase();
+
+gui_window_close(slot);
+
 break;
 
 }
@@ -352,11 +486,6 @@ while (timer_ticks() - frame_start < 1)
 
 
 }
-
-
-gui_cursor_erase();
-
-console_clear();
 
 
 }
