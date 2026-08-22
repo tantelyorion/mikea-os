@@ -6,6 +6,19 @@
 
 #include "../kernel/drivers/graphics/graphics.h"
 
+#include "../kernel/drivers/mouse/mouse.h"
+
+#include "../libc/string.h"
+
+
+void keyboard_flush();
+
+int keyboard_available();
+
+char keyboard_getchar();
+
+unsigned long timer_ticks();
+
 
 /*
     Correctif (fenetre invisible en mode graphique) : ces
@@ -178,7 +191,12 @@ fb_put(x + i, y + j, ' ', color);
 
 
 
-void gui_draw_window(int x, int y, int width, int height, const char* title, u8 color, u32* bx, u32* by, u32* bsize)
+void gui_draw_window(
+int x, int y, int width, int height, const char* title, u8 color,
+u32* bx, u32* by, u32* bsize,
+u32* max_bx, u32* max_by, u32* max_bsize, int is_maximized,
+u32* min_bx, u32* min_by, u32* min_bsize
+)
 {
 
 gui_draw_box(x, y, width, height, color);
@@ -219,30 +237,118 @@ gfx_draw_text(px + 8 * GFX_SCALE, py + 2, title, theme_titlebar_text(), GFX_SCAL
 
 
 /*
-    Bouton de fermeture : pastille ronde-carree rouge discrete
-    (meme codage visuel que le "point rouge" macOS/GNOME)
-    avec un "x" fin plutot qu'un bloc plein agressif. Dessine
-    en dernier pour rester au-dessus du reste de la barre de
+    Boutons de barre de titre, alignes a droite, dans l'ordre
+    (de droite a gauche) fermer / agrandir / reduire -- seul
+    le bouton de fermeture garde un accent de couleur (rouge),
+    les deux autres restent en gris (texte), pas d'accent de
+    couleur supplementaire (voir gui/theme.c). Dessines en
+    dernier pour rester au-dessus du reste de la barre de
     titre.
 */
 
 u32 button_size = 8 * GFX_SCALE;
 
-u32 button_x = px + pw - button_size - 4;
-
 u32 button_y = py + (titlebar_h - button_size) / 2;
 
 
-gfx_fill_rect(button_x, button_y, button_size, button_size, theme_close_bg());
-
-gfx_draw_text(button_x, button_y, "x", theme_close_symbol(), GFX_SCALE);
+u32 close_x = px + pw - button_size - 4;
 
 
-if (bx != (void*)0) { *bx = button_x; }
+gfx_fill_rect(close_x, button_y, button_size, button_size, theme_close_bg());
+
+gfx_draw_text(close_x, button_y, "x", theme_close_symbol(), GFX_SCALE);
+
+
+if (bx != (void*)0) { *bx = close_x; }
 
 if (by != (void*)0) { *by = button_y; }
 
 if (bsize != (void*)0) { *bsize = button_size; }
+
+
+u32 next_x = close_x;
+
+
+if (max_bx != (void*)0 && max_by != (void*)0 && max_bsize != (void*)0)
+{
+
+
+u32 max_x = next_x - button_size - 4;
+
+
+gfx_draw_rect(max_x, button_y, button_size, button_size, theme_button_border());
+
+
+if (is_maximized)
+{
+
+/*
+    Deux petits carres superposes = "restaurer" (icone
+    standard Windows/GNOME pour repasser de plein
+    ecran a une fenetre normale).
+*/
+
+u32 inset = button_size / 4;
+
+gfx_draw_rect(max_x + inset, button_y, button_size - inset, button_size - inset, theme_text());
+
+}
+else
+{
+
+/* Un seul carre plein = "agrandir". */
+
+if (button_size > 4)
+{
+
+gfx_draw_rect(max_x + 2, button_y + 2, button_size - 4, button_size - 4, theme_text());
+
+}
+
+}
+
+
+*max_bx = max_x;
+
+*max_by = button_y;
+
+*max_bsize = button_size;
+
+
+next_x = max_x;
+
+
+}
+
+
+if (min_bx != (void*)0 && min_by != (void*)0 && min_bsize != (void*)0)
+{
+
+
+u32 min_x = next_x - button_size - 4;
+
+
+gfx_draw_rect(min_x, button_y, button_size, button_size, theme_button_border());
+
+
+/* Un simple trait horizontal en bas de la case = "reduire" (meme convention que Windows/GNOME). */
+
+if (button_size > 4)
+{
+
+gfx_draw_hline(min_x + 2, button_y + button_size - 4, button_size - 4, theme_text());
+
+}
+
+
+*min_bx = min_x;
+
+*min_by = button_y;
+
+*min_bsize = button_size;
+
+
+}
 
 
 return;
@@ -742,5 +848,202 @@ return 0;
 *win_y = new_win_y;
 
 return 1;
+
+}
+
+
+int gui_text_prompt(const char* title, const char* label, const char* initial_value, char* buffer, int max_len)
+{
+
+
+if (!gfx_available())
+{
+
+return 0;
+
+}
+
+
+int i = 0;
+
+if (initial_value != (void*)0)
+{
+
+while (initial_value[i] != 0 && i < max_len - 1)
+{
+
+buffer[i] = initial_value[i];
+
+i++;
+
+}
+
+}
+
+buffer[i] = 0;
+
+
+u32 cols = gfx_width() / (8 * GFX_SCALE);
+
+u32 rows = gfx_height() / (8 * GFX_SCALE);
+
+
+int panel_w = 30;
+
+if (panel_w > (int)cols - 4) { panel_w = (int)cols - 4; }
+
+int panel_h = 9;
+
+int panel_x = ((int)cols - panel_w) / 2;
+
+int panel_y = ((int)rows - panel_h) / 2;
+
+
+gui_drag drag;
+
+drag.active = 0;
+
+
+u32 field_x, field_y, field_w, field_h;
+
+u32 ok_x, ok_y, ok_w, ok_h;
+
+u32 cancel_x, cancel_y, cancel_w, cancel_h;
+
+u32 close_bx, close_by, close_bsize;
+
+
+int redraw = 1;
+
+int was_pressed = 0;
+
+int result = -1;
+
+
+keyboard_flush();
+
+
+while (result < 0)
+{
+
+
+if (redraw)
+{
+
+
+gui_draw_window(panel_x, panel_y, panel_w, panel_h, title, theme_text_attr(), &close_bx, &close_by, &close_bsize, (void*)0, (void*)0, (void*)0, 0, (void*)0, (void*)0, (void*)0);
+
+gui_draw_text(panel_x + 1, panel_y + 2, label, theme_text_attr());
+
+gui_draw_field(panel_x + 1, panel_y + 3, panel_w - 2, 2, buffer, 0, 1, &field_x, &field_y, &field_w, &field_h);
+
+gui_draw_button(panel_x + 1, panel_y + 6, (panel_w - 3) / 2, 2, "OK", &ok_x, &ok_y, &ok_w, &ok_h);
+
+gui_draw_button(panel_x + 2 + (panel_w - 3) / 2, panel_y + 6, (panel_w - 3) / 2, 2, "Annuler", &cancel_x, &cancel_y, &cancel_w, &cancel_h);
+
+
+redraw = 0;
+
+}
+
+
+s32 mx = mouse_get_x();
+
+s32 my = mouse_get_y();
+
+gui_draw_cursor(mx, my);
+
+
+int now_pressed = mouse_left_pressed();
+
+int clicked = (now_pressed && !was_pressed);
+
+was_pressed = now_pressed;
+
+
+if (gui_drag_update(&drag, &panel_x, &panel_y, panel_w, panel_h, mx, my, now_pressed, close_bx, close_by, close_bsize))
+{
+
+redraw = 1;
+
+}
+
+
+if (clicked && !drag.active)
+{
+
+if (gui_point_in_rect(close_bx, close_by, close_bsize, close_bsize, mx, my))
+{
+
+result = 0;
+
+}
+else if (gui_point_in_rect(ok_x, ok_y, ok_w, ok_h, mx, my))
+{
+
+result = (buffer[0] != 0) ? 1 : 0;
+
+}
+else if (gui_point_in_rect(cancel_x, cancel_y, cancel_w, cancel_h, mx, my))
+{
+
+result = 0;
+
+}
+
+}
+
+
+if (keyboard_available())
+{
+
+char c = keyboard_getchar();
+
+
+if (c == '\n')
+{
+
+result = (buffer[0] != 0) ? 1 : 0;
+
+}
+else if (c == '\b')
+{
+
+u32 len = mk_strlen(buffer);
+
+if (len > 0) { buffer[len - 1] = 0; }
+
+redraw = 1;
+
+}
+else if (c != 0)
+{
+
+u32 len = mk_strlen(buffer);
+
+if ((int)len < max_len - 1) { buffer[len] = c; buffer[len + 1] = 0; }
+
+redraw = 1;
+
+}
+
+}
+
+
+unsigned long frame_start = timer_ticks();
+
+while (timer_ticks() - frame_start < 1)
+{
+}
+
+
+}
+
+
+gui_cursor_erase();
+
+
+return result;
+
 
 }

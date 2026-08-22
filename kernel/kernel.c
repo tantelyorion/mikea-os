@@ -916,6 +916,18 @@ shell/commands.c), au lieu d'etre une structure morte.
 */
 
 
+/*
+    Table des fenetres graphiques (gui/window.c, multi-
+    fenetrage/reduction) : initialisee ici, avant tout thread
+    d'application susceptible d'en creer -- symetrique a
+    thread_init()/scheduler_init() juste au-dessus.
+*/
+
+void gui_window_system_init();
+
+gui_window_system_init();
+
+
 process_create("msh", msh_start);
 
 thread_create(msh_start);

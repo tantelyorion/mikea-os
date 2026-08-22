@@ -78,4 +78,24 @@ void icon_draw_power(u32 px, u32 py, u32 size, gfx_color color);
 void icon_draw_grid(u32 px, u32 py, u32 size, gfx_color color);
 
 
+/*
+    Anneau "ouvert" (redemarrage) -- voir icon_draw_power()
+    pour le symbole d'extinction complet ; celui-ci en est une
+    variante ouverte avec une pointe de fleche, plutot qu'un
+    anneau ferme.
+*/
+
+void icon_draw_reboot(u32 px, u32 py, u32 size, gfx_color color);
+
+
+/* Corbeille : cuve + couvercle + poignee, meme registre bloc/pixel-art que les autres icones. */
+
+void icon_draw_trash(u32 px, u32 py, u32 size, gfx_color color);
+
+
+/* Disque (icone "Installer sur le disque") : cadre + ligne de separation + petit temoin d'activite. */
+
+void icon_draw_disk(u32 px, u32 py, u32 size, gfx_color color);
+
+
 #endif

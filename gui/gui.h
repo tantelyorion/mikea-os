@@ -36,15 +36,26 @@ void gui_draw_box(int x, int y, int width, int height, u8 color);
 /*
     Dessine une "fenetre" : une boite avec une barre de
     titre sur sa premiere ligne. En mode graphique, dessine
-    aussi un bouton de fermeture ('X') dans le coin superieur
-    droit de la barre de titre, et renseigne ses coordonnees
-    pixel (bx, by, bsize) pour un test de collision avec la
-    souris -- voir gui_point_in_button(). Les pointeurs de
-    sortie peuvent etre nuls si l'appelant n'en a pas besoin
-    (ex. mode texte).
+    aussi trois boutons dans le coin superieur droit de la
+    barre de titre -- fermer ('X', accent rouge), agrandir/
+    restaurer (case(s), gris) et reduire ('-', gris) -- style
+    "feux de circulation" macOS/Windows/GNOME, et renseigne
+    leurs coordonnees pixel pour un test de collision avec la
+    souris -- voir gui_point_in_button(). "is_maximized"
+    determine l'icone du bouton agrandir (case pleine =
+    agrandir, deux cases superposees = restaurer, meme
+    convention que Windows). Les pointeurs de sortie peuvent
+    etre nuls si l'appelant n'en a pas besoin (ex. mode texte,
+    ou pas de bouton reduire/agrandir souhaite -- voir
+    gui/gui.c, gui_text_prompt()).
 */
 
-void gui_draw_window(int x, int y, int width, int height, const char* title, u8 color, u32* bx, u32* by, u32* bsize);
+void gui_draw_window(
+int x, int y, int width, int height, const char* title, u8 color,
+u32* bx, u32* by, u32* bsize,
+u32* max_bx, u32* max_by, u32* max_bsize, int is_maximized,
+u32* min_bx, u32* min_by, u32* min_bsize
+);
 
 
 /*
@@ -200,6 +211,26 @@ int width, int height,
 s32 mouse_x, s32 mouse_y, int mouse_down,
 u32 close_bx, u32 close_by, u32 close_bsize
 );
+
+
+/*
+    Boite de dialogue de saisie modale (renommer un fichier,
+    nommer un nouveau fichier/dossier...) : petit panneau avec
+    un champ de texte (deja pre-rempli avec "initial_value",
+    utile pour "renommer" -- vide pour "nouveau fichier") et
+    deux boutons "OK"/"Annuler". Bloque jusqu'a ce que
+    l'utilisateur choisisse l'un des deux (clic ou Entree/
+    Echap -- ce clavier n'a pas de touche Echap distincte,
+    voir kernel/drivers/keyboard, donc Entree valide toujours;
+    seul le clic sur "Annuler" annule). Ecrit le resultat dans
+    "buffer" (deja alloue par l'appelant, "max_len" octets) et
+    renvoie 1 si "OK" a ete choisi avec un texte non vide, 0
+    si "Annuler" a ete choisi (buffer laisse intact). Graphique
+    uniquement (appelant responsable de ne pas l'invoquer hors
+    mode graphique, comme le reste de gui.h).
+*/
+
+int gui_text_prompt(const char* title, const char* label, const char* initial_value, char* buffer, int max_len);
 
 
 #endif

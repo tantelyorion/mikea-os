@@ -41,4 +41,17 @@
 void gui_desktop_run();
 
 
+/*
+    Dessine le fond du bureau (degrade + barre des taches, sans
+    le Centre d'applications) sans bloquer -- a appeler par les
+    applications (voir apps/calculator/calculator.c et les
+    autres) au lieu d'un simple console_clear(), pour que le
+    bureau reste visible derriere leur fenetre plutot que de
+    disparaitre completement. Sans effet si gfx_available() est
+    faux (mode texte).
+*/
+
+void desktop_render_backdrop();
+
+
 #endif

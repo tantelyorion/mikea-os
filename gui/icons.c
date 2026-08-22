@@ -263,3 +263,127 @@ gfx_fill_rect(x, y, dot, dot, color);
 }
 
 }
+
+
+/*
+    Anneau "ouvert" (un cote manquant, cote droit) avec un
+    petit carre pres de l'ouverture faisant office de pointe de
+    fleche -- silhouette differente de icon_draw_power()
+    (anneau complet + trait vertical) tout en restant dans le
+    meme registre "anneau carre" (pas de primitive de cercle,
+    voir le commentaire de icon_draw_power()). Se lit comme un
+    symbole d'actualisation/redemarrage a cette echelle.
+*/
+
+void icon_draw_reboot(u32 px, u32 py, u32 size, gfx_color color)
+{
+
+u32 ring_size = (size * 7) / 10;
+
+u32 ring_x = px + (size - ring_size) / 2;
+
+u32 ring_y = py + size / 8;
+
+
+gfx_draw_hline(ring_x, ring_y, ring_size, color);
+
+gfx_draw_hline(ring_x, ring_y + ring_size - 1, ring_size, color);
+
+gfx_draw_vline(ring_x, ring_y, ring_size, color);
+
+
+u32 arrow_size = size / 6;
+
+if (arrow_size < 2) { arrow_size = 2; }
+
+
+u32 arrow_x = (ring_x + ring_size > arrow_size) ? (ring_x + ring_size - arrow_size) : ring_x;
+
+u32 arrow_y = (ring_size > arrow_size) ? (ring_y + ring_size / 2 - arrow_size / 2) : ring_y;
+
+
+gfx_fill_rect(arrow_x, arrow_y, arrow_size, arrow_size, color);
+
+}
+
+
+void icon_draw_trash(u32 px, u32 py, u32 size, gfx_color color)
+{
+
+u32 lid_w = (size * 3) / 5;
+
+u32 lid_x = px + (size - lid_w) / 2;
+
+u32 lid_y = py + size / 6;
+
+
+gfx_fill_rect(lid_x, lid_y, lid_w, size / 10 > 1 ? size / 10 : 1, color);
+
+
+u32 handle_w = lid_w / 3;
+
+if (handle_w < 2) { handle_w = 2; }
+
+u32 handle_x = px + (size - handle_w) / 2;
+
+u32 handle_h = size / 10 > 1 ? size / 10 : 1;
+
+u32 handle_y = (lid_y > handle_h) ? lid_y - handle_h : 0;
+
+
+gfx_draw_rect(handle_x, handle_y, handle_w, handle_h + 1, color);
+
+
+u32 bin_y = lid_y + (size / 10 > 1 ? size / 10 : 1) + 1;
+
+u32 bin_h = (py + size > bin_y) ? (py + size - bin_y) : 1;
+
+u32 bin_w = (size * 2) / 3;
+
+u32 bin_x = px + (size - bin_w) / 2;
+
+
+gfx_draw_rect(bin_x, bin_y, bin_w, bin_h, color);
+
+
+if (bin_w > 6 && bin_h > 4)
+{
+
+u32 stripe_y0 = bin_y + bin_h / 4;
+
+u32 stripe_y1 = bin_y + (bin_h * 3) / 4;
+
+gfx_draw_vline(bin_x + bin_w / 3, stripe_y0, stripe_y1 - stripe_y0, color);
+
+gfx_draw_vline(bin_x + (bin_w * 2) / 3, stripe_y0, stripe_y1 - stripe_y0, color);
+
+}
+
+}
+
+
+void icon_draw_disk(u32 px, u32 py, u32 size, gfx_color color)
+{
+
+gfx_draw_rect(px, py, size, size, color);
+
+
+u32 line_y = py + (size * 2) / 3;
+
+gfx_draw_hline(px + 1, line_y, size - 2, color);
+
+
+/* Petit temoin d'activite, juste sous la ligne de separation, aligne a droite. */
+
+u32 dot_size = size / 8;
+
+if (dot_size < 2) { dot_size = 2; }
+
+u32 dot_x = (px + size > dot_size * 2) ? (px + size - dot_size * 2) : px;
+
+u32 dot_y = line_y + 2;
+
+
+gfx_fill_rect(dot_x, dot_y, dot_size, dot_size, color);
+
+}

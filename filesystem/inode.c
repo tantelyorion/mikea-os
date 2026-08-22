@@ -80,6 +80,15 @@ inode_table[i].block = 0;
 inode_table[i].permission = 0;
 
 
+inode_table[i].deleted = 0;
+
+
+inode_table[i].is_directory = 0;
+
+
+inode_table[i].parent[0] = 0;
+
+
 }
 
 
@@ -106,6 +115,19 @@ CREATE INODE
 
 inode* inode_create(
 char* name
+)
+{
+
+return inode_create_ex(name, "", 0);
+
+}
+
+
+
+inode* inode_create_ex(
+char* name,
+char* parent,
+int is_directory
 )
 {
 
@@ -202,6 +224,43 @@ new_block;
 
 node->permission =
 7;
+
+
+/*
+    Corbeille (voir filesystem/file.c, file_trash()) :
+    remis explicitement a 0 a la creation -- necessaire
+    depuis que inode_create() peut reutiliser une entree
+    precedemment liberee par inode_delete() (voir plus bas
+    dans ce fichier, "used=0" mais rien ne remettait
+    "deleted" a 0 auparavant, ce champ n'existant pas encore).
+*/
+
+node->deleted =
+0;
+
+
+node->is_directory =
+is_directory;
+
+
+u32 p = 0;
+
+while(
+parent != 0
+&&
+parent[p]
+&&
+p < FILE_NAME_SIZE - 1
+)
+{
+
+node->parent[p] = parent[p];
+
+p++;
+
+}
+
+node->parent[p] = 0;
 
 
 
@@ -413,6 +472,15 @@ node->size=0;
 
 
 node->block=0;
+
+
+node->deleted=0;
+
+
+node->is_directory=0;
+
+
+node->parent[0]=0;
 
 
 
