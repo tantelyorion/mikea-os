@@ -2,6 +2,8 @@
 
 #include "../kernel/drivers/power/power.h"
 
+#include "../kernel/drivers/speaker/speaker.h"
+
 #include "msh.h"
 
 #include "../libc/string.h"
@@ -1830,6 +1832,8 @@ else if(command[0] == 0)
 
 else
 {
+
+sound_play_error();
 
 console_write("Command not found\n");
 

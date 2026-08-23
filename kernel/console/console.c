@@ -14,6 +14,33 @@ static int cursor_x=0;
 static int cursor_y=0;
 
 
+/* Voir console_set_top_margin() (console.h). */
+
+static int console_margin_rows = 0;
+
+
+void console_set_top_margin(int rows)
+{
+
+if (rows < 0)
+{
+
+rows = 0;
+
+}
+
+console_margin_rows = rows;
+
+if (cursor_y < console_margin_rows)
+{
+
+cursor_y = console_margin_rows;
+
+}
+
+}
+
+
 /*
     ============================================================
     Correctif (etape 2 interface graphique) : bascule pixels
@@ -106,7 +133,7 @@ text++;
 if (cursor_y >= (int)gfx_rows())
 {
 
-gfx_scroll_up(8 * GFX_SCALE, GFX_BG);
+gfx_scroll_up_region((u32)console_margin_rows * 8 * GFX_SCALE, 8 * GFX_SCALE, GFX_BG);
 
 cursor_y = (int)gfx_rows() - 1;
 
@@ -141,7 +168,7 @@ cursor_y++;
 if (cursor_y >= (int)gfx_rows())
 {
 
-gfx_scroll_up(8 * GFX_SCALE, GFX_BG);
+gfx_scroll_up_region((u32)console_margin_rows * 8 * GFX_SCALE, 8 * GFX_SCALE, GFX_BG);
 
 cursor_y = (int)gfx_rows() - 1;
 
@@ -353,7 +380,7 @@ gui_cursor_reset();
 
 cursor_x = 0;
 
-cursor_y = 0;
+cursor_y = console_margin_rows;
 
 return;
 

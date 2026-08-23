@@ -245,6 +245,33 @@ int clicked = (now_pressed && !was_pressed);
 was_pressed = now_pressed;
 
 
+/*
+    Correctif (barre des taches non cliquable pendant que
+    cette fenetre a le focus) : voir le meme commentaire dans
+    apps/calculator/calculator.c.
+*/
+
+if (clicked)
+{
+
+u32 rows_now = gfx_height() / (8 * GFX_SCALE);
+
+u32 taskbar_top_px = (rows_now - 2) * 8 * GFX_SCALE;
+
+if ((u32)my >= taskbar_top_px)
+{
+
+gui_cursor_erase();
+
+gui_window_yield_click(slot);
+
+continue;
+
+}
+
+}
+
+
 if (!maximized && gui_drag_update(&drag, &win_x, &win_y, win_w, win_h, mx, my, now_pressed, close_x, close_y, close_size))
 {
 
