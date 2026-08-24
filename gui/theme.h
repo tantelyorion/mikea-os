@@ -113,4 +113,51 @@ gfx_color theme_shadow();
 u8 theme_text_attr();
 
 
+/*
+    ============================================================
+    Fond d'ecran (voir gui/desktop.c, desktop_paint_wallpaper())
+    ============================================================
+
+    Limite assumee, honnetement documentee plutot que masquee :
+    ce noyau n'a AUCUN decodeur d'image (ni JPEG, ni PNG, ni
+    BMP -- en ecrire un est un chantier a part entiere). Il est
+    donc impossible d'afficher une vraie photo comme fond
+    d'ecran. A la place, 6 MOTIFS PROCEDURAUX distincts,
+    dessines avec les memes primitives que le reste de
+    l'interface (kernel/drivers/graphics), en niveaux de gris
+    coherents avec le theme clair/sombre courant -- un choix
+    honnete plutot qu'une fausse promesse de "photos".
+*/
+
+typedef enum
+{
+
+WALLPAPER_GRADIENT,   /* dsegrade vertical doux (motif d'origine, garde comme reglage par defaut) */
+
+WALLPAPER_STRIPES,    /* fines rayures horizontales alternees */
+
+WALLPAPER_CHECKER,    /* damier a grandes cases */
+
+WALLPAPER_DOTS,       /* grille de points espaces */
+
+WALLPAPER_DIAGONAL,   /* rayures diagonales "en escalier" */
+
+WALLPAPER_SOLID       /* aplat uni (le plus sobre des 6) */
+
+} wallpaper_style;
+
+
+#define WALLPAPER_STYLE_COUNT 6
+
+
+void wallpaper_set_style(wallpaper_style style);
+
+wallpaper_style wallpaper_get_style();
+
+
+/* Nom court affiche dans le selecteur de apps/settings/settings.c. */
+
+const char* wallpaper_style_name(wallpaper_style style);
+
+
 #endif

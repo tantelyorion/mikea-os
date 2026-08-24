@@ -143,6 +143,39 @@ void gui_window_close(int slot);
 
 
 /*
+    Correctif (barre des taches non cliquable pendant qu'une
+    fenetre est ouverte) : le bureau dessine la barre des taches
+    en arriere-plan de chaque application (voir
+    desktop_render_backdrop()) pour qu'elle reste VISIBLE, mais
+    tant qu'une fenetre a le focus, elle seule lit la souris --
+    un clic sur l'icone "Toutes les applications" ou sur une
+    autre fenetre de la barre, elle ne le reconnait pas comme
+    sien et l'ignore silencieusement. Chaque application appelle
+    donc cette fonction des qu'elle detecte qu'un clic tombe
+    dans la bande reservee a la barre des taches (le bas de
+    l'ecran, sous sa propre fenetre) : equivalent a
+    gui_window_minimize(), mais qui indique EN PLUS au bureau
+    qu'un clic est deja en cours a cet endroit -- pour qu'il le
+    traite des sa reprise de focus au lieu d'attendre un tout
+    nouveau clic (sans quoi il faudrait cliquer deux fois : une
+    pour rendre la main au bureau, une pour que le clic compte
+    vraiment).
+*/
+
+void gui_window_yield_click(int slot);
+
+
+/*
+    A appeler UNIQUEMENT par gui/desktop.c, juste apres avoir
+    regagne le focus : renvoie 1 (et consomme le signal) si
+    c'est gui_window_yield_click() qui vient de le rendre plutot
+    que gui_window_minimize()/gui_window_close(), 0 sinon.
+*/
+
+int gui_window_take_pending_click();
+
+
+/*
     A appeler UNIQUEMENT depuis le thread du bureau : donne le
     focus a "slot" (restaurer une fenetre reduite depuis sa
     ligne de barre des taches, ou depuis le Centre

@@ -24,6 +24,15 @@ static int g_focused_slot = -1;
 
 
 /*
+    Voir le commentaire de gui_window_yield_click() (window.h) :
+    signale au bureau qu'un clic est deja en cours au moment ou
+    il regagne le focus, pour qu'il le traite immediatement.
+*/
+
+static int g_pending_click = 0;
+
+
+/*
     Associe l'identifiant unique d'un thread (thread->id,
     attribue sequentiellement par thread_create(), voir
     kernel/process/thread.c) au slot de fenetre qui lui a ete
@@ -60,6 +69,8 @@ g_window_of_thread[i] = -1;
 
 
 g_focused_slot = -1;
+
+g_pending_click = 0;
 
 }
 
@@ -260,5 +271,27 @@ return (void*)0;
 
 
 return &g_windows[slot];
+
+}
+
+
+void gui_window_yield_click(int slot)
+{
+
+gui_window_minimize(slot);
+
+g_pending_click = 1;
+
+}
+
+
+int gui_window_take_pending_click()
+{
+
+int had = g_pending_click;
+
+g_pending_click = 0;
+
+return had;
 
 }

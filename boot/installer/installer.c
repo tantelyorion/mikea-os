@@ -163,6 +163,38 @@ return -1;
 
 outb(ATA_DRIVE_HEAD, (u8)(drive_select | ((lba >> 24) & 0x0F)));
 
+
+/*
+    Correctif (installation qui echoue -- verification ou
+    lecture/ecriture en erreur) : contrairement a
+    filesystem/disk.c, qui reste TOUJOURS sur le disque
+    esclave et n'a donc jamais besoin de ce delai, ce fichier
+    ALTERNE a chaque secteur entre le disque maitre (lecture)
+    et le disque esclave (ecriture puis verification) -- deux
+    voire trois changements de disque selectionne par secteur.
+    D'apres la specification ATA/IDE, le controleur a besoin
+    d'un court delai de stabilisation (~400ns) apres avoir
+    change le registre Drive/Head avant que Status (BSY/DRQ)
+    ne redevienne fiable : sans ce delai, ata_wait_ready()/
+    ata_wait_data() ci-dessous peuvent lire le statut ENCORE
+    valable pour l'AUTRE disque (celui selectionne juste
+    avant), et croire a tort le controleur pret alors qu'il ne
+    l'est pas encore pour ce nouveau disque -- ce qui corrompt
+    silencieusement la lecture/ecriture qui suit. Quatre
+    lectures de Status ignorees introduisent le delai requis
+    (technique standard, voir le wiki OSDev, "ATA PIO Mode" :
+    faute d'un vrai registre "Alternate Status" cable ici, on
+    utilise Status lui-meme).
+*/
+
+for (int delay = 0; delay < 4; delay++)
+{
+
+inb(ATA_STATUS);
+
+}
+
+
 outb(ATA_SECCOUNT, 1);
 
 outb(ATA_LBA_LOW,  (u8)(lba & 0xFF));
@@ -211,6 +243,17 @@ return -1;
 
 
 outb(ATA_DRIVE_HEAD, (u8)(drive_select | ((lba >> 24) & 0x0F)));
+
+
+/* Meme delai de stabilisation requis qu'ata_read_sector() ci-dessus. */
+
+for (int delay = 0; delay < 4; delay++)
+{
+
+inb(ATA_STATUS);
+
+}
+
 
 outb(ATA_SECCOUNT, 1);
 

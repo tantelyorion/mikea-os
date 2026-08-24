@@ -933,6 +933,19 @@ process_create("msh", msh_start);
 thread_create(msh_start);
 
 
+/*
+    Son de demarrage (kernel/drivers/speaker) : joue une seule
+    fois, l'initialisation du noyau etant terminee (threads,
+    ordonnanceur et le thread "msh" lui-meme prets a s'executer)
+    -- le tout dernier evenement avant de rendre la main a
+    l'ordonnanceur (scheduler_run(), juste en dessous).
+*/
+
+void sound_play_startup();
+
+sound_play_startup();
+
+
 
 
 /*

@@ -16,6 +16,8 @@
 
 #include "../kernel/drivers/power/power.h"
 
+#include "../kernel/drivers/speaker/speaker.h"
+
 
 /*
     Declarations "externes" plutot qu'un #include des headers
@@ -55,6 +57,12 @@ void cmd_settings();
 void cmd_gui();
 
 void cmd_trash_app();
+
+
+void console_set_top_margin(int rows);
+
+
+static void desktop_draw_console_titlebar(const char* title);
 
 
 #define GFX_SCALE 2
@@ -180,7 +188,10 @@ out[i] = 0;
     actif" exigerait de reecrire sa boucle de saisie de zero.
     Consequence assumee : ouvrir le Terminal bloque le bureau
     (comme avant), le Centre d'applications reste inaccessible
-    tant qu'il est ouvert.
+    tant qu'il est ouvert. A defaut d'une vraie fenetre
+    cliquable, une barre de titre est tout de meme dessinee
+    (voir desktop_draw_console_titlebar()) pour rester coherent
+    visuellement avec le reste du bureau.
 */
 
 static int desktop_run_terminal()
@@ -190,6 +201,10 @@ char command[128];
 
 
 console_clear();
+
+desktop_draw_console_titlebar("Terminal");
+
+console_set_top_margin(1);
 
 console_write("Terminal Mikea OS\n");
 
@@ -210,6 +225,8 @@ input_readline(command, sizeof(command));
 if (mk_strcmp(command, "exit") == 0)
 {
 
+console_set_top_margin(0);
+
 return 0;
 
 }
@@ -220,6 +237,8 @@ execute_command(command);
 
 if (shell_logout_was_requested())
 {
+
+console_set_top_margin(0);
 
 return 1;
 
@@ -239,6 +258,45 @@ typedef struct
 u32 x, y, w, h;
 
 } desktop_hitbox;
+
+
+/*
+    Barre de titre minimale pour les applications texte plein
+    ecran (Terminal, Installateur) : contrairement aux fenetres
+    "normales" (voir gui/gui.c, gui_draw_window()), ces deux-la
+    utilisent la console texte (console_write()/input_readline(),
+    kernel/console/console.c) plutot qu'un rendu image par image
+    avec sondage de la souris -- les integrer au meme systeme de
+    fenetres a bouton fermer/reduire/agrandir cliquables
+    exigerait de reecrire leur lecture d'entree de zero (voir le
+    commentaire de desktop_run_terminal() plus bas). A defaut,
+    cette bande de titre les distingue au moins visuellement
+    d'une console plein ecran brute, avec le texte qui defile
+    EN DESSOUS grace a console_set_top_margin() (voir
+    kernel/console/console.h) -- jamais par-dessus.
+
+    Limite assumee : si le texte affiche utilise la commande
+    shell "clear" (efface tout, y compris cette bande), la
+    barre de titre disparait jusqu'a la prochaine ouverture --
+    cas marginal, non traite ici pour rester dans un temps
+    raisonnable.
+*/
+
+static void desktop_draw_console_titlebar(const char* title)
+{
+
+u32 bar_w = gfx_width();
+
+u32 bar_h = 8 * GFX_SCALE + 4;
+
+
+gfx_fill_rect_blend(0, 0, bar_w, bar_h, theme_titlebar_bg(), 95);
+
+gfx_draw_hline(0, bar_h - 1, bar_w, theme_border());
+
+gfx_draw_text(8 * GFX_SCALE, 2, title, theme_titlebar_text(), GFX_SCALE);
+
+}
 
 
 /*
@@ -367,6 +425,10 @@ static void desktop_run_shutdown()
 
 console_clear();
 
+desktop_draw_console_titlebar("Extinction");
+
+console_set_top_margin(1);
+
 power_shutdown();
 
 console_write("\nAppuyez sur Entree pour revenir au bureau.\n");
@@ -376,6 +438,9 @@ keyboard_flush();
 char dummy[8];
 
 input_readline(dummy, sizeof(dummy));
+
+
+console_set_top_margin(0);
 
 }
 
@@ -394,6 +459,10 @@ static void desktop_run_installer()
 
 console_clear();
 
+desktop_draw_console_titlebar("Installateur");
+
+console_set_top_margin(1);
+
 
 char cmd[16] = "install";
 
@@ -407,6 +476,9 @@ keyboard_flush();
 char dummy[8];
 
 input_readline(dummy, sizeof(dummy));
+
+
+console_set_top_margin(0);
 
 }
 
@@ -762,17 +834,16 @@ state->app_center_entries[i].h = row_h;
     "Papier peint" procedural : ce projet n'a aucun decodeur
     d'image (ni PNG, ni BMP -- en ajouter un est un chantier a
     part entiere, hors de portee raisonnable ici), donc pas de
-    veritable image de fond a afficher. A defaut, un degrade
-    vertical doux (legerement plus sombre en bas qu'en haut).
+    veritable photo a afficher. A la place, 6 motifs distincts
+    au choix (voir gui/theme.h, wallpaper_style -- reglable
+    depuis apps/settings/settings.c), dessines dans un
+    rectangle arbitraire ("x","y","w","h") plutot que
+    forcement plein ecran : reutilisee telle quelle pour les
+    vignettes miniatures du selecteur de Parametres.
 */
 
-static void desktop_paint_wallpaper()
+void gui_paint_wallpaper_area(u32 x, u32 y, u32 w, u32 h, wallpaper_style style)
 {
-
-u32 w = gfx_width();
-
-u32 h = gfx_height();
-
 
 gfx_color base = theme_desktop_bg();
 
@@ -783,18 +854,23 @@ int base_g = (int)((base >> 8) & 0xFF);
 int base_b = (int)(base & 0xFF);
 
 
+switch (style)
+{
+
+
+case WALLPAPER_GRADIENT:
+{
+
 int total_shift = 12;
 
-u32 bands = 48;
+u32 bands = 24;
 
 u32 band_h = (h / bands) + 1;
-
 
 for (u32 i = 0; i < bands; i++)
 {
 
 int delta = -(int)((total_shift * (long)i) / (long)bands);
-
 
 int r = base_r + delta; if (r < 0) { r = 0; } if (r > 255) { r = 255; }
 
@@ -802,12 +878,161 @@ int g = base_g + delta; if (g < 0) { g = 0; } if (g > 255) { g = 255; }
 
 int b = base_b + delta; if (b < 0) { b = 0; } if (b > 255) { b = 255; }
 
-
 gfx_color band_color = ((u32)r << 16) | ((u32)g << 8) | (u32)b;
 
-gfx_fill_rect(0, i * band_h, w, band_h, band_color);
+gfx_fill_rect(x, y + i * band_h, w, band_h, band_color);
 
 }
+
+break;
+
+}
+
+
+case WALLPAPER_STRIPES:
+{
+
+gfx_fill_rect(x, y, w, h, base);
+
+u32 stripe_h = (h / 16) + 1;
+
+for (u32 i = 0; i < h; i += stripe_h * 2)
+{
+
+gfx_fill_rect_blend(x, y + i, w, stripe_h, theme_shadow(), 8);
+
+}
+
+break;
+
+}
+
+
+case WALLPAPER_CHECKER:
+{
+
+gfx_fill_rect(x, y, w, h, base);
+
+u32 cell = (w / 8) + 1;
+
+int toggle_row = 0;
+
+for (u32 cy = 0; cy < h; cy += cell)
+{
+
+int toggle = toggle_row;
+
+for (u32 cx = 0; cx < w; cx += cell)
+{
+
+if (toggle)
+{
+
+u32 cw = (cx + cell <= w) ? cell : (w - cx);
+
+u32 ch = (cy + cell <= h) ? cell : (h - cy);
+
+gfx_fill_rect_blend(x + cx, y + cy, cw, ch, theme_shadow(), 6);
+
+}
+
+toggle = !toggle;
+
+}
+
+toggle_row = !toggle_row;
+
+}
+
+break;
+
+}
+
+
+case WALLPAPER_DOTS:
+{
+
+gfx_fill_rect(x, y, w, h, base);
+
+u32 spacing = (w / 12) + 1;
+
+u32 dot = spacing / 4; if (dot < 1) { dot = 1; }
+
+for (u32 dy = spacing / 2; dy < h; dy += spacing)
+{
+
+for (u32 dx = spacing / 2; dx < w; dx += spacing)
+{
+
+gfx_fill_rect_blend(x + dx, y + dy, dot, dot, theme_shadow(), 18);
+
+}
+
+}
+
+break;
+
+}
+
+
+case WALLPAPER_DIAGONAL:
+{
+
+gfx_fill_rect(x, y, w, h, base);
+
+u32 step = (w / 10) + 1;
+
+for (u32 i = 0; i < w + h; i += step)
+{
+
+u32 lx = (i < w) ? (x + i) : x;
+
+u32 ly = (i < w) ? y : (y + (i - w));
+
+u32 len = (h < w) ? h : w;
+
+if (lx + len > x + w) { len = (x + w > lx) ? (x + w - lx) : 0; }
+
+if (ly + len > y + h) { len = (y + h > ly) ? (y + h - ly) : 0; }
+
+for (u32 k = 0; k < len; k++)
+{
+
+if (lx + k < x + w && ly + k < y + h)
+{
+
+gfx_put_pixel(lx + k, ly + k, theme_border());
+
+}
+
+}
+
+}
+
+break;
+
+}
+
+
+default: /* WALLPAPER_SOLID */
+{
+
+gfx_fill_rect(x, y, w, h, base);
+
+break;
+
+}
+
+
+}
+
+}
+
+
+static void desktop_paint_wallpaper()
+{
+
+gui_paint_wallpaper_area(0, 0, gfx_width(), gfx_height(), wallpaper_get_style());
 
 }
 
@@ -825,9 +1050,6 @@ if (gfx_available())
 desktop_paint_wallpaper();
 
 }
-
-
-gui_draw_text(1, 1, "Mikea OS", theme_text_attr());
 
 
 desktop_draw_taskbar(state);
@@ -862,8 +1084,6 @@ state.app_center_open = 0;
 console_clear();
 
 desktop_paint_wallpaper();
-
-gui_draw_text(1, 1, "Mikea OS", theme_text_attr());
 
 desktop_draw_taskbar(&state);
 
@@ -941,12 +1161,7 @@ if (!had_focus)
 /*
     On vient de regagner le focus (fenetre fermee ou
     reduite) : tout redessiner, l'ecran affiche encore le
-    contenu de cette fenetre. "was_pressed" reprend l'etat
-    PHYSIQUE actuel du bouton (pas 0) : si le bouton est
-    encore enfonce au moment precis ou le focus revient
-    (ex. clic sur "Fermer" pas encore relache), ca evite de
-    l'interpreter par erreur comme un tout nouveau clic sur
-    le bureau des la premiere image.
+    contenu de cette fenetre.
 */
 
 desktop_draw(&state);
@@ -955,7 +1170,38 @@ gui_cursor_reset();
 
 keyboard_flush();
 
+
+if (gui_window_take_pending_click())
+{
+
+/*
+    Correctif (barre des taches non cliquable pendant
+    qu'une fenetre est ouverte) : une application vient
+    de nous ceder un clic deja en cours (voir
+    gui_window_yield_click(), gui/window.c) -- on force
+    "was_pressed" a 0 pour que le traitement de clic
+    normal ci-dessous le reconnaisse IMMEDIATEMENT comme
+    un nouveau clic, sans obliger l'utilisateur a
+    relacher puis re-cliquer.
+*/
+
+was_pressed = 0;
+
+}
+else
+{
+
+/*
+    Meme precaution que pour un clic transfere : capturer
+    l'etat REEL du bouton plutot que de supposer qu'il
+    est relache, pour ne pas confondre un clic deja en
+    cours ailleurs avec un nouveau clic sur le bureau.
+*/
+
 was_pressed = mouse_left_pressed();
+
+}
+
 
 had_focus = 1;
 
@@ -1063,6 +1309,9 @@ int opened = gui_window_open(APP_CENTER_ENTRIES[matched].label, APP_CENTER_ENTRI
 
 if (opened < 0)
 {
+
+sound_play_error();
+
 
 /*
     Correctif (clic sans aucun effet visible) : table de
@@ -1228,9 +1477,28 @@ if (now - last_clock_update >= 500)
 
 last_clock_update = now;
 
-desktop_draw(&state);
 
-gui_cursor_reset();
+/*
+    Correctif (scintillement visible toutes les 5 secondes
+    meme sans rien taper) : la version precedente appelait
+    desktop_draw(&state), qui efface et repeint l'ecran
+    ENTIER (fond degrade compris, l'operation la plus
+    couteuse de ce fichier) juste pour mettre a jour 5
+    caracteres d'horloge. On ne redessine desormais que la
+    bande de la barre des taches (desktop_draw_taskbar()),
+    largement suffisant puisque c'est la seule chose qui
+    change. gui_cursor_erase() avant (pas
+    gui_cursor_reset()) : contrairement a un console_clear()
+    complet, l'ecran n'est pas efface ailleurs, donc le
+    tampon de restauration du curseur reste valable -- il
+    suffit de retirer le curseur avant de repeindre en
+    dessous, il sera resauvegarde normalement au prochain
+    gui_draw_cursor().
+*/
+
+gui_cursor_erase();
+
+desktop_draw_taskbar(&state);
 
 }
 

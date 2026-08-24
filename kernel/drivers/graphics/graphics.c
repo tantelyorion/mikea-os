@@ -469,6 +469,64 @@ gfx_fill_rect(0, vbe_info->height - pixel_rows, vbe_info->width, pixel_rows, bg)
 }
 
 
+void gfx_scroll_up_region(u32 top_y, u32 pixel_rows, gfx_color bg)
+{
+
+
+if (!gfx_ready)
+{
+
+return;
+
+}
+
+
+if (top_y >= vbe_info->height)
+{
+
+return;
+
+}
+
+
+u32 region_height = vbe_info->height - top_y;
+
+
+if (pixel_rows >= region_height)
+{
+
+gfx_fill_rect(0, top_y, vbe_info->width, region_height, bg);
+
+return;
+
+}
+
+
+u8* fb = (u8*)(u64)vbe_info->addr;
+
+u32 row_bytes = pixel_rows * vbe_info->pitch;
+
+u32 region_start = top_y * vbe_info->pitch;
+
+u32 region_bytes = region_height * vbe_info->pitch;
+
+
+/* Meme technique de copie brute que gfx_scroll_up(), bornee a la bande region_start..fin d'ecran. */
+
+for (u32 i = 0; i < region_bytes - row_bytes; i++)
+{
+
+fb[region_start + i] = fb[region_start + i + row_bytes];
+
+}
+
+
+gfx_fill_rect(0, vbe_info->height - pixel_rows, vbe_info->width, pixel_rows, bg);
+
+
+}
+
+
 u32 gfx_bpp()
 {
 

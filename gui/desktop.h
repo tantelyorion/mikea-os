@@ -2,6 +2,11 @@
 #define MIKEA_GUI_DESKTOP_H
 
 
+#include "../include/types.h"
+
+#include "theme.h"
+
+
 /*
     ============================================================
     Mikea OS - Bureau graphique
@@ -52,6 +57,18 @@ void gui_desktop_run();
 */
 
 void desktop_render_backdrop();
+
+
+/*
+    Dessine un motif de fond d'ecran (voir gui/theme.h,
+    wallpaper_style) dans le rectangle pixel ("x","y","w","h")
+    donne -- pas forcement plein ecran : utilisee par
+    desktop_render_backdrop() pour tout l'ecran, et par
+    apps/settings/settings.c pour les vignettes miniatures du
+    selecteur de fond d'ecran (memes motifs, juste plus petits).
+*/
+
+void gui_paint_wallpaper_area(u32 x, u32 y, u32 w, u32 h, wallpaper_style style);
 
 
 #endif

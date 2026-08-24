@@ -95,6 +95,19 @@ void gfx_scroll_up(u32 pixel_rows, gfx_color bg);
 
 
 /*
+    Variante de gfx_scroll_up() qui ne fait defiler que la
+    bande verticale a partir de "top_y" (en pixels) jusqu'au
+    bas de l'ecran, laissant tout ce qui est AU-DESSUS
+    inchange -- utilisee par kernel/console/console.c pour
+    qu'une console "encadree dans une fenetre" (voir
+    console_set_top_margin()) puisse faire defiler son texte
+    sans jamais effacer la barre de titre au-dessus.
+*/
+
+void gfx_scroll_up_region(u32 top_y, u32 pixel_rows, gfx_color bg);
+
+
+/*
     Lit/ecrit les octets bruts (pas de conversion de couleur)
     d'une zone rectangulaire, "bpp"/8 octets par pixel. Utilise
     pour sauvegarder puis restaurer le fond situe sous le

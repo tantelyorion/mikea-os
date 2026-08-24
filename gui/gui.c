@@ -1013,7 +1013,16 @@ u32 len = mk_strlen(buffer);
 
 if (len > 0) { buffer[len - 1] = 0; }
 
-redraw = 1;
+
+/*
+    Correctif (ecran qui scintille a chaque frappe) : ne
+    redessiner QUE le champ (gui_draw_field() redessine deja
+    entierement son propre fond), pas toute la fenetre
+    (cadre + les deux boutons) comme le faisait
+    auparavant "redraw = 1".
+*/
+
+gui_draw_field(panel_x + 1, panel_y + 3, panel_w - 2, 2, buffer, 0, 1, &field_x, &field_y, &field_w, &field_h);
 
 }
 else if (c != 0)
@@ -1023,7 +1032,8 @@ u32 len = mk_strlen(buffer);
 
 if ((int)len < max_len - 1) { buffer[len] = c; buffer[len + 1] = 0; }
 
-redraw = 1;
+
+gui_draw_field(panel_x + 1, panel_y + 3, panel_w - 2, 2, buffer, 0, 1, &field_x, &field_y, &field_w, &field_h);
 
 }
 

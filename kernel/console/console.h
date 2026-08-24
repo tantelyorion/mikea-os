@@ -35,4 +35,19 @@ void console_backspace();
 void console_clear();
 
 
+/*
+    Reserve "rows" lignes de texte en haut de l'ecran, jamais
+    ecrites ni effacees par console_write()/console_clear() --
+    utilisee par les applications qui dessinent leur propre
+    barre de titre par-dessus une console plein ecran (voir
+    gui/desktop.c, desktop_run_terminal() et
+    desktop_run_installer()) : sans ca, le texte du terminal
+    remontait par-dessus la barre de titre des le premier
+    defilement. "rows" a 0 desactive la marge (comportement
+    d'origine, plein ecran des la ligne 0).
+*/
+
+void console_set_top_margin(int rows);
+
+
 #endif

@@ -2,12 +2,17 @@
 
 #include "../../cpu/io.h"
 
+#include "../speaker/speaker.h"
+
 
 void console_write(const char* text);
 
 
 void power_reboot()
 {
+
+
+sound_play_shutdown();
 
 
 console_write("Redemarrage...\n");
@@ -61,6 +66,9 @@ asm volatile("hlt");
 
 void power_shutdown()
 {
+
+
+sound_play_shutdown();
 
 
 console_write("Extinction...\n");

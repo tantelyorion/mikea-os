@@ -50,6 +50,36 @@ u32 x, y, w, h;
 } fm_hitbox;
 
 
+/*
+    Dossiers standards (Documents, Images, etc.), crees a la
+    racine des le premier passage dans l'explorateur -- meme
+    principe que le dossier personnel pre-rempli de Windows/
+    macOS/GNOME a la premiere connexion. directory_create()
+    (filesystem/directory.c) renvoie simplement 0 sans rien
+    faire si le nom existe deja (fichier ou dossier) : appeler
+    cette fonction a chaque ouverture de l'explorateur est donc
+    sans danger (idempotent), pas seulement au tout premier
+    demarrage.
+*/
+
+static void fm_ensure_standard_folders()
+{
+
+directory_create("Documents", "");
+
+directory_create("Images", "");
+
+directory_create("Videos", "");
+
+directory_create("Musique", "");
+
+directory_create("Telechargements", "");
+
+directory_create("Bureau", "");
+
+}
+
+
 void cmd_files()
 {
 
@@ -72,6 +102,9 @@ if (slot < 0)
 return;
 
 }
+
+
+fm_ensure_standard_folders();
 
 
 int win_x = 2, win_y = 2, win_w = 34, win_h = 20;
@@ -267,6 +300,33 @@ int now_pressed = mouse_left_pressed();
 int clicked = (now_pressed && !was_pressed);
 
 was_pressed = now_pressed;
+
+
+/*
+    Correctif (barre des taches non cliquable pendant que
+    cette fenetre a le focus) : voir le meme commentaire dans
+    apps/calculator/calculator.c.
+*/
+
+if (clicked)
+{
+
+u32 rows_now = gfx_height() / (8 * GFX_SCALE);
+
+u32 taskbar_top_px = (rows_now - 2) * 8 * GFX_SCALE;
+
+if ((u32)my >= taskbar_top_px)
+{
+
+gui_cursor_erase();
+
+gui_window_yield_click(slot);
+
+continue;
+
+}
+
+}
 
 
 if (!maximized && gui_drag_update(&drag, &win_x, &win_y, win_w, win_h, mx, my, now_pressed, close_bx, close_by, close_bsize))

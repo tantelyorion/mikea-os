@@ -280,10 +280,34 @@ was_pressed = now_pressed;
 
 
 /*
-    Glisser-deposer par la barre de titre (voir gui.h) : a
-    tester avant les clics sur les touches. Desactive en
-    plein ecran (comme sur un bureau habituel).
+    Correctif (barre des taches non cliquable pendant que
+    cette fenetre a le focus) : le bureau la dessine en
+    arriere-plan (desktop_render_backdrop()) mais ne peut pas
+    lire les clics tant qu'il n'a pas le focus -- voir
+    gui/window.h. On detecte donc ici tout clic tombant dans
+    sa bande reservee (bas de l'ecran) et on lui cede
+    immediatement la main dessus.
 */
+
+if (clicked)
+{
+
+u32 rows_now = gfx_height() / (8 * GFX_SCALE);
+
+u32 taskbar_top_px = (rows_now - 2) * 8 * GFX_SCALE;
+
+if ((u32)my >= taskbar_top_px)
+{
+
+gui_cursor_erase();
+
+gui_window_yield_click(slot);
+
+continue;
+
+}
+
+}
 
 if (!maximized && gui_drag_update(&drag, &win_x, &win_y, win_w, win_h, mx, my, now_pressed, close_bx, close_by, close_bsize))
 {

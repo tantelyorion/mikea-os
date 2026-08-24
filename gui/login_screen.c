@@ -10,6 +10,8 @@
 
 #include "../libc/string.h"
 
+#include "../kernel/drivers/speaker/speaker.h"
+
 
 void console_clear();
 
@@ -293,7 +295,31 @@ field[len - 1] = 0;
 
 }
 
-redraw = 1;
+
+/*
+    Correctif (ecran qui scintille a chaque frappe) : la
+    version precedente posait "redraw = 1" ici, qui
+    redessinait TOUT le panneau (fond translucide compris,
+    l'operation la plus couteuse de ce fichier) pour une
+    simple frappe -- visible comme un scintillement a
+    chaque caractere tape. On ne redessine desormais QUE le
+    champ concerne (gui_draw_field() redessine deja
+    entierement son propre fond, pas besoin de toucher au
+    reste de l'ecran autour).
+*/
+
+if (active_field == 0)
+{
+
+gui_draw_field(panel_x + 2, panel_y + 5, panel_w - 4, 2, username, 0, 1, &user_box.x, &user_box.y, &user_box.w, &user_box.h);
+
+}
+else
+{
+
+gui_draw_field(panel_x + 2, panel_y + 8, panel_w - 4, 2, password, 1, 1, &pass_box.x, &pass_box.y, &pass_box.w, &pass_box.h);
+
+}
 
 }
 
@@ -311,7 +337,21 @@ field[len + 1] = 0;
 
 }
 
-redraw = 1;
+
+/* Meme redessin cible que le retour arriere ci-dessus. */
+
+if (active_field == 0)
+{
+
+gui_draw_field(panel_x + 2, panel_y + 5, panel_w - 4, 2, username, 0, 1, &user_box.x, &user_box.y, &user_box.w, &user_box.h);
+
+}
+else
+{
+
+gui_draw_field(panel_x + 2, panel_y + 8, panel_w - 4, 2, password, 1, 1, &pass_box.x, &pass_box.y, &pass_box.w, &pass_box.h);
+
+}
 
 }
 
@@ -338,6 +378,8 @@ return logged_in;
 
 }
 
+
+sound_play_error();
 
 error_message = "Identifiant ou mot de passe incorrect";
 

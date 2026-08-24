@@ -12,6 +12,16 @@
 static int dark_mode = 0;
 
 
+/*
+    Fond d'ecran courant (voir theme.h) -- meme principe qu'un
+    seul etat global que "dark_mode" ci-dessus, pas persiste sur
+    disque (comme le theme clair/sombre, remis a
+    WALLPAPER_GRADIENT a chaque redemarrage).
+*/
+
+static wallpaper_style g_wallpaper_style = WALLPAPER_GRADIENT;
+
+
 void theme_set_dark(int enabled)
 {
 
@@ -227,5 +237,51 @@ u8 theme_text_attr()
 */
 
 return dark_mode ? 0x0F : 0x70;
+
+}
+
+
+void wallpaper_set_style(wallpaper_style style)
+{
+
+if (style >= 0 && style < WALLPAPER_STYLE_COUNT)
+{
+
+g_wallpaper_style = style;
+
+}
+
+}
+
+
+wallpaper_style wallpaper_get_style()
+{
+
+return g_wallpaper_style;
+
+}
+
+
+const char* wallpaper_style_name(wallpaper_style style)
+{
+
+switch (style)
+{
+
+case WALLPAPER_GRADIENT: return "Degrade";
+
+case WALLPAPER_STRIPES: return "Rayures";
+
+case WALLPAPER_CHECKER: return "Damier";
+
+case WALLPAPER_DOTS: return "Points";
+
+case WALLPAPER_DIAGONAL: return "Diagonales";
+
+case WALLPAPER_SOLID: return "Uni";
+
+default: return "?";
+
+}
 
 }
