@@ -1,0 +1,25 @@
+name: build-artificats-on-commit
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-24
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v7
+      - name: install dependencies
+        run: \
+           sudo apt update;
+           sudo apt install build-essential;
+           sudo apt install nasm clang lld build make;
+      - name: build mikea-os
+        run: make CC=clang LD="clang --target=x86_64-elf -fuse-ld=lld -nostdlib" LD_FLAGS="-Wl,-T,linker.ld -Wl,-z,max-page-size=0x1000" OBJCOPY=llvm-objcopy TARGET_FLAG=--target=x86_64-elf all
+      - name: rename builds
+        run: \
+          mv build/MikeaOS.img build/imgs/MikeaOS-x86_64.img
+      - name: send as artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          path: build/imgs/*
+          archive: false
