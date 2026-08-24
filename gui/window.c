@@ -122,6 +122,8 @@ g_windows[slot].in_use = 1;
 
 g_windows[slot].minimized = 0;
 
+g_windows[slot].entry = entry;
+
 mk_strcpy(g_windows[slot].title, title, sizeof(g_windows[slot].title));
 
 
@@ -293,5 +295,25 @@ int had = g_pending_click;
 g_pending_click = 0;
 
 return had;
+
+}
+
+
+int gui_window_find_by_entry(void (*entry)())
+{
+
+for (int i = 0; i < GUI_MAX_WINDOWS; i++)
+{
+
+if (g_windows[i].in_use && g_windows[i].entry == entry)
+{
+
+return i;
+
+}
+
+}
+
+return -1;
 
 }

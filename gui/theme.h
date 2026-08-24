@@ -150,6 +150,20 @@ WALLPAPER_SOLID       /* aplat uni (le plus sobre des 6) */
 #define WALLPAPER_STYLE_COUNT 6
 
 
+/*
+    Au-dela des 6 motifs procéduraux ci-dessus : de vraies
+    photos (voir gui/assets/wallpaper_images.h), selectionnees
+    par leur INDICE dans WALLPAPER_PHOTOS[] plutot que par un
+    style parmi wallpaper_style. -1 = aucune photo choisie,
+    utiliser un motif procédural a la place (wallpaper_get_style()
+    fait toujours foi dans ce cas).
+*/
+
+void wallpaper_set_photo_index(int index);
+
+int wallpaper_get_photo_index();
+
+
 void wallpaper_set_style(wallpaper_style style);
 
 wallpaper_style wallpaper_get_style();

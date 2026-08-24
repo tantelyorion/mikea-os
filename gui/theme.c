@@ -22,6 +22,11 @@ static int dark_mode = 0;
 static wallpaper_style g_wallpaper_style = WALLPAPER_GRADIENT;
 
 
+/* -1 = pas de photo choisie (voir theme.h). Premiere photo (index 0) active par defaut. */
+
+static int g_wallpaper_photo_index = 0;
+
+
 void theme_set_dark(int enabled)
 {
 
@@ -249,7 +254,25 @@ if (style >= 0 && style < WALLPAPER_STYLE_COUNT)
 
 g_wallpaper_style = style;
 
+g_wallpaper_photo_index = -1;
+
 }
+
+}
+
+
+void wallpaper_set_photo_index(int index)
+{
+
+g_wallpaper_photo_index = index;
+
+}
+
+
+int wallpaper_get_photo_index()
+{
+
+return g_wallpaper_photo_index;
 
 }
 

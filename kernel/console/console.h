@@ -2,6 +2,9 @@
 #define MIKEA_CONSOLE_H
 
 
+#include "../drivers/graphics/graphics.h"
+
+
 void console_init();
 
 void console_write(
@@ -48,6 +51,21 @@ void console_clear();
 */
 
 void console_set_top_margin(int rows);
+
+
+/*
+    Force temporairement la couleur de texte/fond de la console
+    graphique, quel que soit le theme courant (voir
+    gui/theme.c) -- utilisee pour donner au Terminal/
+    Installateur (gui/desktop.c) leur fond noir traditionnel,
+    independant du theme clair/sombre choisi dans Parametres.
+    "enabled" a 0 desactive la surcharge (retour au theme
+    normal, comportement par defaut).
+*/
+
+void console_set_fg_override(gfx_color color, int enabled);
+
+void console_set_bg_override(gfx_color color, int enabled);
 
 
 #endif

@@ -42,6 +42,62 @@ cursor_y = console_margin_rows;
 
 
 /*
+    Correctif (Terminal/Installateur sans identite visuelle
+    propre) : ces deux macros (GFX_FG/GFX_BG, plus bas) suivaient
+    jusqu'ici TOUJOURS le theme courant (clair/sombre). Un vrai
+    terminal a traditionnellement un fond NOIR quel que soit le
+    theme du reste du bureau (voir gui/desktop.c,
+    desktop_draw_terminal_frame()) -- ces fonctions permettent
+    de le forcer ponctuellement, tout en gardant le theme normal
+    partout ailleurs (desactive par defaut).
+*/
+
+static int console_fg_override_enabled = 0;
+
+static gfx_color console_fg_override_color = 0;
+
+static int console_bg_override_enabled = 0;
+
+static gfx_color console_bg_override_color = 0;
+
+
+void console_set_fg_override(gfx_color color, int enabled)
+{
+
+console_fg_override_color = color;
+
+console_fg_override_enabled = enabled;
+
+}
+
+
+void console_set_bg_override(gfx_color color, int enabled)
+{
+
+console_bg_override_color = color;
+
+console_bg_override_enabled = enabled;
+
+}
+
+
+static gfx_color console_current_fg()
+{
+
+return console_fg_override_enabled ? console_fg_override_color : theme_text();
+
+}
+
+
+static gfx_color console_current_bg()
+{
+
+return console_bg_override_enabled ? console_bg_override_color : theme_desktop_bg();
+
+}
+
+
+/*
     ============================================================
     Correctif (etape 2 interface graphique) : bascule pixels
     ============================================================
@@ -69,9 +125,9 @@ cursor_y = console_margin_rows;
     d'une seule palette figee au demarrage.
 */
 
-#define GFX_FG (theme_text())
+#define GFX_FG (console_current_fg())
 
-#define GFX_BG (theme_desktop_bg())
+#define GFX_BG (console_current_bg())
 
 
 static u32 gfx_cols()

@@ -71,4 +71,17 @@ void desktop_render_backdrop();
 void gui_paint_wallpaper_area(u32 x, u32 y, u32 w, u32 h, wallpaper_style style);
 
 
+/*
+    Meme principe que gui_paint_wallpaper_area() ci-dessus, mais
+    pour une VRAIE photo (voir gui/assets/wallpaper_images.h),
+    reperee par son indice dans WALLPAPER_PHOTOS[] plutot que par
+    un style procédural. Affichee "en mosaique" (voir le
+    commentaire dans gui/desktop.c) : chaque pixel de la photo
+    (80x60) devient un bloc agrandi pour remplir le rectangle
+    cible. Sans effet si "photo_index" est hors bornes.
+*/
+
+void gui_paint_photo_area(u32 x, u32 y, u32 w, u32 h, u32 photo_index);
+
+
 #endif
