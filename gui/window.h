@@ -68,6 +68,17 @@ char title[32];
 
 int minimized;
 
+/*
+    Correctif (cliquer deux fois sur la meme application dans
+    le Centre d'applications ouvrait une deuxieme fenetre au
+    lieu de redonner le focus a la premiere) : conserve la
+    fonction qui a lance cette fenetre, pour que gui/desktop.c
+    puisse verifier si une fenetre du meme type existe deja
+    avant d'en creer une nouvelle -- voir gui_window_find_by_entry().
+*/
+
+void (*entry)();
+
 } gui_window_slot;
 
 
@@ -197,6 +208,20 @@ int gui_window_desktop_has_focus();
 */
 
 const gui_window_slot* gui_window_get(int slot);
+
+
+/*
+    Renvoie l'indice du slot d'une fenetre DEJA OUVERTE (reduite
+    ou non) qui a ete lancee avec cette meme fonction "entry",
+    ou -1 si aucune. A appeler AVANT gui_window_open() pour
+    savoir s'il faut plutot rendre le focus a une fenetre
+    existante (voir gui_window_focus()) -- comportement attendu
+    d'un lanceur d'applications habituel (Windows, macOS, GNOME) :
+    cliquer une deuxieme fois sur la meme application la fait
+    revenir au premier plan plutot que d'en ouvrir une copie.
+*/
+
+int gui_window_find_by_entry(void (*entry)());
 
 
 #endif

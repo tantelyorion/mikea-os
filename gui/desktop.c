@@ -8,6 +8,8 @@
 
 #include "window.h"
 
+#include "assets/wallpaper_images.h"
+
 #include "../kernel/drivers/graphics/graphics.h"
 
 #include "../kernel/drivers/mouse/mouse.h"
@@ -61,8 +63,14 @@ void cmd_trash_app();
 
 void console_set_top_margin(int rows);
 
+void console_set_fg_override(gfx_color color, int enabled);
+
+void console_set_bg_override(gfx_color color, int enabled);
+
 
 static void desktop_draw_console_titlebar(const char* title);
+
+static void desktop_reset_console_colors();
 
 
 #define GFX_SCALE 2
@@ -225,7 +233,7 @@ input_readline(command, sizeof(command));
 if (mk_strcmp(command, "exit") == 0)
 {
 
-console_set_top_margin(0);
+desktop_reset_console_colors();
 
 return 0;
 
@@ -238,7 +246,7 @@ execute_command(command);
 if (shell_logout_was_requested())
 {
 
-console_set_top_margin(0);
+desktop_reset_console_colors();
 
 return 1;
 
@@ -261,24 +269,28 @@ u32 x, y, w, h;
 
 
 /*
-    Barre de titre minimale pour les applications texte plein
-    ecran (Terminal, Installateur) : contrairement aux fenetres
-    "normales" (voir gui/gui.c, gui_draw_window()), ces deux-la
-    utilisent la console texte (console_write()/input_readline(),
-    kernel/console/console.c) plutot qu'un rendu image par image
-    avec sondage de la souris -- les integrer au meme systeme de
-    fenetres a bouton fermer/reduire/agrandir cliquables
-    exigerait de reecrire leur lecture d'entree de zero (voir le
-    commentaire de desktop_run_terminal() plus bas). A defaut,
-    cette bande de titre les distingue au moins visuellement
-    d'une console plein ecran brute, avec le texte qui defile
-    EN DESSOUS grace a console_set_top_margin() (voir
-    kernel/console/console.h) -- jamais par-dessus.
+    Cadre "console plein ecran" pour les applications texte
+    (Terminal, Installateur, Extinction) : contrairement aux
+    fenetres "normales" (voir gui/gui.c, gui_draw_window()), ces
+    applications utilisent la console texte (console_write()/
+    input_readline(), kernel/console/console.c) plutot qu'un
+    rendu image par image avec sondage de la souris -- les
+    integrer au meme systeme de fenetres a bouton fermer/reduire/
+    agrandir cliquables exigerait de reecrire leur lecture
+    d'entree de zero (voir le commentaire de
+    desktop_run_terminal() plus bas).
+
+    A defaut, ce cadre leur donne quand meme une VRAIE identite
+    de fenetre : fond NOIR plein ecran (comme n'importe quel
+    terminal reel, independant du theme clair/sombre courant --
+    voir console_set_bg_override(), kernel/console/console.c) et
+    une barre de titre, avec le texte qui defile EN DESSOUS grace
+    a console_set_top_margin() -- jamais par-dessus.
 
     Limite assumee : si le texte affiche utilise la commande
-    shell "clear" (efface tout, y compris cette bande), la
-    barre de titre disparait jusqu'a la prochaine ouverture --
-    cas marginal, non traite ici pour rester dans un temps
+    shell "clear" (efface tout, y compris cette bande), la barre
+    de titre disparait jusqu'a la prochaine ouverture -- cas
+    marginal, non traite ici pour rester dans un temps
     raisonnable.
 */
 
@@ -290,11 +302,51 @@ u32 bar_w = gfx_width();
 u32 bar_h = 8 * GFX_SCALE + 4;
 
 
+/*
+    Fond noir plein ecran (pas la couleur du theme) : c'est ce
+    qui donne au Terminal/Installateur leur apparence de
+    "vraie" fenetre de console, plutot qu'un texte flottant sur
+    le fond degrade/photo du bureau.
+*/
+
+gfx_fill_rect(0, 0, gfx_width(), gfx_height(), 0x000000);
+
+
 gfx_fill_rect_blend(0, 0, bar_w, bar_h, theme_titlebar_bg(), 95);
 
 gfx_draw_hline(0, bar_h - 1, bar_w, theme_border());
 
 gfx_draw_text(8 * GFX_SCALE, 2, title, theme_titlebar_text(), GFX_SCALE);
+
+
+/*
+    Texte clair force (voir console_set_fg_override()) : sur
+    fond noir, le texte suivrait sinon le theme courant --
+    illisible (noir sur noir) des que le theme clair est actif.
+*/
+
+console_set_bg_override(0x000000, 1);
+
+console_set_fg_override(0xE0E0E0, 1);
+
+}
+
+
+/*
+    A appeler en sortant d'un ecran "console plein ecran" (voir
+    desktop_draw_console_titlebar() ci-dessus), pour que le
+    bureau et les autres applications retrouvent leurs couleurs
+    normales, liees au theme.
+*/
+
+static void desktop_reset_console_colors()
+{
+
+console_set_bg_override(0, 0);
+
+console_set_fg_override(0, 0);
+
+console_set_top_margin(0);
 
 }
 
@@ -413,9 +465,13 @@ static void desktop_run_reboot()
 
 console_clear();
 
+desktop_draw_console_titlebar("Redemarrage");
+
+console_set_top_margin(1);
+
 power_reboot();
 
-/* Ne revient jamais si power_reboot() reussit. */
+/* Ne revient jamais si power_reboot() reussit -- pas besoin de desktop_reset_console_colors() ici. */
 
 }
 
@@ -440,7 +496,7 @@ char dummy[8];
 input_readline(dummy, sizeof(dummy));
 
 
-console_set_top_margin(0);
+desktop_reset_console_colors();
 
 }
 
@@ -478,7 +534,7 @@ char dummy[8];
 input_readline(dummy, sizeof(dummy));
 
 
-console_set_top_margin(0);
+desktop_reset_console_colors();
 
 }
 
@@ -831,15 +887,15 @@ state->app_center_entries[i].h = row_h;
 
 
 /*
-    "Papier peint" procedural : ce projet n'a aucun decodeur
-    d'image (ni PNG, ni BMP -- en ajouter un est un chantier a
-    part entiere, hors de portee raisonnable ici), donc pas de
-    veritable photo a afficher. A la place, 6 motifs distincts
-    au choix (voir gui/theme.h, wallpaper_style -- reglable
-    depuis apps/settings/settings.c), dessines dans un
-    rectangle arbitraire ("x","y","w","h") plutot que
-    forcement plein ecran : reutilisee telle quelle pour les
-    vignettes miniatures du selecteur de Parametres.
+    "Papier peint" procedural : les 6 motifs geometriques
+    d'origine (voir gui/theme.h, wallpaper_style), toujours
+    disponibles -- utilises quand aucune photo n'est
+    selectionnee (voir wallpaper_get_photo_index(),
+    gui_paint_photo_area() juste en dessous pour les VRAIES
+    photos). Dessines dans un rectangle arbitraire ("x","y","w",
+    "h") plutot que forcement plein ecran : reutilisee telle
+    quelle pour les vignettes miniatures du selecteur de
+    Parametres.
 */
 
 void gui_paint_wallpaper_area(u32 x, u32 y, u32 w, u32 h, wallpaper_style style)
@@ -1029,8 +1085,94 @@ break;
 }
 
 
+/*
+    Vraie photo (voir gui/assets/wallpaper_images.h), affichee
+    "en mosaique" : chaque pixel source (80x60 -- voir le
+    commentaire de wallpaper_images.h sur cette resolution
+    volontairement petite) devient un bloc de plusieurs pixels a
+    l'ecran, en repartissant la largeur/hauteur du rectangle
+    cible aussi uniformement que possible entre les pixels
+    source. Honnete sur la resolution reelle plutot que de
+    tenter un lissage qui masquerait la taille embarquee
+    minuscule (voir le commentaire de wallpaper_images.h sur les
+    contraintes de place qui l'imposent).
+*/
+
+void gui_paint_photo_area(u32 x, u32 y, u32 w, u32 h, u32 photo_index)
+{
+
+if (photo_index >= wallpaper_photo_count())
+{
+
+return;
+
+}
+
+
+const wallpaper_photo* photo = &WALLPAPER_PHOTOS[photo_index];
+
+
+for (u32 row = 0; row < photo->height; row++)
+{
+
+
+u32 block_y = y + (row * h) / photo->height;
+
+u32 block_y_end = y + ((row + 1) * h) / photo->height;
+
+u32 block_h = (block_y_end > block_y) ? (block_y_end - block_y) : 1;
+
+
+for (u32 col = 0; col < photo->width; col++)
+{
+
+
+u32 block_x = x + (col * w) / photo->width;
+
+u32 block_x_end = x + ((col + 1) * w) / photo->width;
+
+u32 block_w = (block_x_end > block_x) ? (block_x_end - block_x) : 1;
+
+
+u32 src_offset = (row * photo->width + col) * 3;
+
+u8 r = photo->rgb_data[src_offset];
+
+u8 g = photo->rgb_data[src_offset + 1];
+
+u8 b = photo->rgb_data[src_offset + 2];
+
+
+gfx_color pixel_color = ((gfx_color)r << 16) | ((gfx_color)g << 8) | (gfx_color)b;
+
+
+gfx_fill_rect(block_x, block_y, block_w, block_h, pixel_color);
+
+
+}
+
+
+}
+
+
+}
+
+
 static void desktop_paint_wallpaper()
 {
+
+int photo_index = wallpaper_get_photo_index();
+
+
+if (photo_index >= 0)
+{
+
+gui_paint_photo_area(0, 0, gfx_width(), gfx_height(), (u32)photo_index);
+
+return;
+
+}
+
 
 gui_paint_wallpaper_area(0, 0, gfx_width(), gfx_height(), wallpaper_get_style());
 
@@ -1295,6 +1437,28 @@ if (APP_CENTER_ENTRIES[matched].window_entry != 0)
 
 
 /*
+    Correctif (cliquer deux fois sur la meme application
+    ouvrait une deuxieme fenetre au lieu de revenir sur la
+    premiere) : si une fenetre de ce type existe deja
+    (reduite ou non), on lui redonne simplement le focus au
+    lieu d'en lancer une autre -- comportement attendu d'un
+    lanceur d'applications habituel (Windows, macOS, GNOME).
+*/
+
+int existing = gui_window_find_by_entry(APP_CENTER_ENTRIES[matched].window_entry);
+
+
+if (existing >= 0)
+{
+
+gui_window_focus(existing);
+
+}
+else
+{
+
+
+/*
     Vraie application : lancee comme une fenetre
     independante (voir gui/window.c), qui recoit
     immediatement le focus -- le bureau se remet en
@@ -1335,6 +1499,8 @@ gui_cursor_reset();
 keyboard_flush();
 
 was_pressed = 0;
+
+}
 
 }
 

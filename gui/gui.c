@@ -819,11 +819,29 @@ int new_win_y = new_py / (8 * GFX_SCALE);
     minimum de 2 cellules de la barre de titre reste toujours
     visible en haut/a gauche, et la fenetre entiere reste sur
     l'ecran a droite/en bas.
+
+    Correctif CRITIQUE (souris "qui ne fonctionne plus" par
+    endroits) : le bas de l'ecran n'etait borne qu'a "rows"
+    (le bas ABSOLU de l'ecran), sans jamais tenir compte des 2
+    dernieres lignes reservees a la barre des taches (voir
+    gui/desktop.c, desktop_draw_taskbar()). Une fenetre glissee
+    tout en bas pouvait donc chevaucher la barre des taches --
+    et tout clic sur ses PROPRES boutons dans cette zone
+    partagee etait alors intercepte par la detection "clic sur
+    la barre des taches" (voir gui_window_yield_click() dans
+    chaque application), qui rend la main au bureau au lieu de
+    declencher le bouton reellement vise. Resultat observe :
+    des boutons "qui ne repondent plus" des qu'une fenetre est
+    deplacee pres du bas de l'ecran. Le meme bornage que le
+    bouton Agrandir (qui, lui, respectait deja cette limite)
+    est applique ici.
 */
 
 int cols = (int)(gfx_width() / (8 * GFX_SCALE));
 
 int rows = (int)(gfx_height() / (8 * GFX_SCALE));
+
+int taskbar_reserved_rows = 2;
 
 
 if (new_win_x < 0) { new_win_x = 0; }
@@ -832,7 +850,7 @@ if (new_win_y < 0) { new_win_y = 0; }
 
 if (new_win_x + width > cols) { new_win_x = cols - width; if (new_win_x < 0) { new_win_x = 0; } }
 
-if (new_win_y + height > rows) { new_win_y = rows - height; if (new_win_y < 0) { new_win_y = 0; } }
+if (new_win_y + height > rows - taskbar_reserved_rows) { new_win_y = rows - taskbar_reserved_rows - height; if (new_win_y < 0) { new_win_y = 0; } }
 
 
 if (new_win_x == *win_x && new_win_y == *win_y)

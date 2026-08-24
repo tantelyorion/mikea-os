@@ -6,6 +6,7 @@
 #include "../../gui/theme.h"
 #include "../../gui/desktop.h"
 #include "../../gui/window.h"
+#include "../../gui/assets/wallpaper_images.h"
 #include "../../kernel/drivers/graphics/graphics.h"
 #include "../../kernel/drivers/mouse/mouse.h"
 
@@ -50,7 +51,7 @@ return;
 }
 
 
-int win_x = 2, win_y = 2, win_w = 34, win_h = 24;
+int win_x = 2, win_y = 2, win_w = 34, win_h = 27;
 
 
 /*
@@ -89,6 +90,8 @@ u32 theme_btn_x, theme_btn_y, theme_btn_w, theme_btn_h;
 
 u32 sound_btn_x, sound_btn_y, sound_btn_w, sound_btn_h;
 
+u32 pattern_btn_x, pattern_btn_y, pattern_btn_w, pattern_btn_h;
+
 u32 close_bx = 0, close_by = 0, close_bsize = 0;
 
 u32 max_bx = 0, max_by = 0, max_bsize = 0;
@@ -96,7 +99,15 @@ u32 max_bx = 0, max_by = 0, max_bsize = 0;
 u32 min_bx = 0, min_by = 0, min_bsize = 0;
 
 
-#define SETTINGS_SWATCH_COUNT WALLPAPER_STYLE_COUNT
+/*
+    6 photos embarquees (voir gui/assets/wallpaper_images.h) --
+    meme nombre que wallpaper_photo_count() a l'execution;
+    fige ici en dur (pas d'utilisation d'une fonction dans une
+    taille de tableau, qui doit rester une constante de
+    compilation).
+*/
+
+#define SETTINGS_SWATCH_COUNT 6
 
 u32 swatch_x[SETTINGS_SWATCH_COUNT], swatch_y[SETTINGS_SWATCH_COUNT];
 
@@ -163,12 +174,16 @@ theme_is_dark() ? "Theme : Sombre" : "Theme : Clair",
 
 
 /*
-    Selecteur de fond d'ecran : 6 vignettes cliquables,
-    chacune un apercu miniature reel du motif (voir
-    gui_paint_wallpaper_area(), gui/desktop.c) plutot qu'un
-    simple libelle texte -- celle actuellement active a une
-    bordure doublee (meme convention que gui_draw_field()
-    pour un champ ayant le focus).
+    Selecteur de fond d'ecran : d'abord les VRAIES photos
+    (voir gui/assets/wallpaper_images.h), en vignettes
+    cliquables avec un aperçu miniature reel -- celle
+    actuellement active a une bordure doublee (meme
+    convention que gui_draw_field() pour un champ ayant le
+    focus). Les motifs procéduraux d'origine (gui/theme.h,
+    wallpaper_style) restent disponibles via un simple bouton
+    qui fait defiler les 6 -- pas une deuxieme grille de
+    vignettes, pour ne pas doubler la hauteur de cette
+    fenetre.
 */
 
 gui_draw_text(win_x + 1, win_y + 11, "Fond d'ecran :", theme_text_attr());
@@ -176,7 +191,7 @@ gui_draw_text(win_x + 1, win_y + 11, "Fond d'ecran :", theme_text_attr());
 
 int swatch_cell_w = 4, swatch_cell_h = 3;
 
-wallpaper_style current_style = wallpaper_get_style();
+int current_photo = wallpaper_get_photo_index();
 
 
 for (int i = 0; i < SETTINGS_SWATCH_COUNT; i++)
@@ -196,12 +211,12 @@ u32 pw = (u32)swatch_cell_w * 8 * GFX_SCALE;
 u32 ph = (u32)swatch_cell_h * 8 * GFX_SCALE;
 
 
-gui_paint_wallpaper_area(px, py, pw, ph, (wallpaper_style)i);
+gui_paint_photo_area(px, py, pw, ph, (u32)i);
 
 
-gfx_draw_rect(px, py, pw, ph, ((int)current_style == i) ? theme_text() : theme_border());
+gfx_draw_rect(px, py, pw, ph, (current_photo == i) ? theme_text() : theme_border());
 
-if ((int)current_style == i && pw > 2 && ph > 2)
+if (current_photo == i && pw > 2 && ph > 2)
 {
 
 gfx_draw_rect(px + 1, py + 1, pw - 2, ph - 2, theme_text());
@@ -220,6 +235,30 @@ swatch_h[i] = ph;
 }
 
 
+{
+
+char pattern_label[40];
+
+const char* prefix = "Motif procedural : ";
+
+int pi = 0;
+
+while (prefix[pi] && pi < 39) { pattern_label[pi] = prefix[pi]; pi++; }
+
+const char* style_name = wallpaper_style_name(wallpaper_get_style());
+
+int si = 0;
+
+while (style_name[si] && pi < 39) { pattern_label[pi++] = style_name[si++]; }
+
+pattern_label[pi] = 0;
+
+
+gui_draw_button(win_x + 1, win_y + 15, win_w - 2, 2, pattern_label, &pattern_btn_x, &pattern_btn_y, &pattern_btn_w, &pattern_btn_h);
+
+}
+
+
 /*
     Reglage sonore (voir kernel/drivers/speaker) : coupe-
     circuit global -- un clic joue immediatement un son de
@@ -229,7 +268,7 @@ swatch_h[i] = ph;
 */
 
 gui_draw_button(
-win_x + 1, win_y + 16, win_w - 2, 2,
+win_x + 1, win_y + 18, win_w - 2, 2,
 sound_is_enabled() ? "Son : Active (cliquer pour tester)" : "Son : Desactive",
 &sound_btn_x, &sound_btn_y, &sound_btn_w, &sound_btn_h
 );
@@ -317,7 +356,7 @@ while (suffix[s] && i < 47) { line[i++] = suffix[s]; s++; }
 line[i] = 0;
 
 
-gui_draw_text(win_x + 1, win_y + 19, line, theme_text_attr());
+gui_draw_text(win_x + 1, win_y + 21, line, theme_text_attr());
 
 }
 
@@ -498,6 +537,25 @@ redraw = 1;
 }
 
 
+else if (clicked && !drag.active && gui_point_in_rect(pattern_btn_x, pattern_btn_y, pattern_btn_w, pattern_btn_h, mx, my))
+{
+
+/*
+    Fait defiler les 6 motifs procéduraux (voir gui/theme.h)
+    -- wallpaper_set_style() choisit aussi automatiquement le
+    mode "motif" (desactive la photo selectionnee, voir
+    theme.c).
+*/
+
+wallpaper_style next = (wallpaper_style)((wallpaper_get_style() + 1) % WALLPAPER_STYLE_COUNT);
+
+wallpaper_set_style(next);
+
+redraw = 1;
+
+}
+
+
 else if (clicked && !drag.active)
 {
 
@@ -507,7 +565,7 @@ for (int i = 0; i < SETTINGS_SWATCH_COUNT; i++)
 if (gui_point_in_rect(swatch_x[i], swatch_y[i], swatch_w[i], swatch_h[i], mx, my))
 {
 
-wallpaper_set_style((wallpaper_style)i);
+wallpaper_set_photo_index(i);
 
 redraw = 1;
 
