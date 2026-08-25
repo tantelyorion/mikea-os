@@ -164,10 +164,76 @@ gfx_clear(GFX_BG);
 
 
 
+/*
+    Redirection de sortie (voir console_redirect_start()) :
+    utilisee par les applications-fenetres qui executent des
+    commandes shell (voir apps/terminal/terminal.c,
+    apps/installer_app/installer_app.c) pour recuperer le texte
+    que execute_command() (shell/commands.c) ecrit normalement
+    a l'ecran, et l'afficher elles-memes dans leur PROPRE zone
+    de fenetre au lieu d'un console_write() plein ecran --
+    aucune des nombreuses commandes shell existantes n'a besoin
+    d'etre modifiee, la redirection est totalement transparente
+    pour elles.
+*/
+
+static char* console_redirect_buffer = 0;
+
+static u32 console_redirect_capacity = 0;
+
+static u32 console_redirect_length = 0;
+
+
+void console_redirect_start(char* buffer, u32 capacity)
+{
+
+console_redirect_buffer = buffer;
+
+console_redirect_capacity = capacity;
+
+console_redirect_length = 0;
+
+if (capacity > 0)
+{
+
+buffer[0] = 0;
+
+}
+
+}
+
+
+void console_redirect_stop()
+{
+
+console_redirect_buffer = 0;
+
+}
+
+
 void console_write(
 const char* text
 )
 {
+
+
+if (console_redirect_buffer != 0)
+{
+
+while (*text && console_redirect_length + 1 < console_redirect_capacity)
+{
+
+console_redirect_buffer[console_redirect_length++] = *text;
+
+text++;
+
+}
+
+console_redirect_buffer[console_redirect_length] = 0;
+
+return;
+
+}
 
 
 if (gfx_available())

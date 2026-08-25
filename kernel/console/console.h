@@ -68,4 +68,17 @@ void console_set_fg_override(gfx_color color, int enabled);
 void console_set_bg_override(gfx_color color, int enabled);
 
 
+/*
+    Capture tout ce que console_write() ecrirait normalement a
+    l'ecran dans "buffer" (jusqu'a "capacity" octets, toujours
+    termine par un caractere nul) au lieu de l'afficher -- voir
+    le commentaire dans console.c. console_redirect_stop()
+    retablit l'affichage normal.
+*/
+
+void console_redirect_start(char* buffer, u32 capacity);
+
+void console_redirect_stop();
+
+
 #endif

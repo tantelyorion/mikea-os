@@ -60,6 +60,10 @@ void cmd_gui();
 
 void cmd_trash_app();
 
+void cmd_terminal_app();
+
+void cmd_installer_app();
+
 
 void console_set_top_margin(int rows);
 
@@ -174,88 +178,6 @@ out[i++] = ':';
 i += write_uint_padded(now.minute, 2, out + i);
 
 out[i] = 0;
-
-}
-
-
-/*
-    Terminal integre au bureau : reutilise execute_command()
-    (shell/commands.c), donc TOUTES les commandes existantes
-    (mpm, mkfs, ps, users...) restent disponibles sans avoir a
-    les reimplementer. "exit" (propre a cette fenetre, pas une
-    commande shell existante) revient simplement au bureau ;
-    "logout" (commande shell existante) est detectee via
-    shell_logout_was_requested() pour remonter la demande de
-    deconnexion jusqu'a gui_desktop_run().
-
-    Reste volontairement HORS du systeme de fenetres (gui/
-    window.c) : il repose sur une lecture ligne par ligne
-    bloquante (input_readline()) plutot qu'un sondage image par
-    image de la souris/du clavier comme les autres applications
-    -- l'adapter au modele "cede le focus des qu'on n'est plus
-    actif" exigerait de reecrire sa boucle de saisie de zero.
-    Consequence assumee : ouvrir le Terminal bloque le bureau
-    (comme avant), le Centre d'applications reste inaccessible
-    tant qu'il est ouvert. A defaut d'une vraie fenetre
-    cliquable, une barre de titre est tout de meme dessinee
-    (voir desktop_draw_console_titlebar()) pour rester coherent
-    visuellement avec le reste du bureau.
-*/
-
-static int desktop_run_terminal()
-{
-
-char command[128];
-
-
-console_clear();
-
-desktop_draw_console_titlebar("Terminal");
-
-console_set_top_margin(1);
-
-console_write("Terminal Mikea OS\n");
-
-console_write("Tapez 'help' pour la liste des commandes, 'exit' pour revenir au bureau.\n\n");
-
-
-keyboard_flush();
-
-
-while (1)
-{
-
-console_write("$ ");
-
-input_readline(command, sizeof(command));
-
-
-if (mk_strcmp(command, "exit") == 0)
-{
-
-desktop_reset_console_colors();
-
-return 0;
-
-}
-
-
-execute_command(command);
-
-
-if (shell_logout_was_requested())
-{
-
-desktop_reset_console_colors();
-
-return 1;
-
-}
-
-
-console_write("\n");
-
-}
 
 }
 
@@ -411,8 +333,8 @@ static const app_center_entry APP_CENTER_ENTRIES[APP_CENTER_ENTRY_COUNT] = {
 { "Parametres", DESKTOP_ACTION_SETTINGS, cmd_settings },
 { "Compte", DESKTOP_ACTION_ACCOUNT, cmd_gui },
 { "Corbeille", DESKTOP_ACTION_TRASH, cmd_trash_app },
-{ "Terminal", DESKTOP_ACTION_TERMINAL, (void*)0 },
-{ "Installer sur le disque", DESKTOP_ACTION_INSTALL, (void*)0 },
+{ "Terminal", DESKTOP_ACTION_TERMINAL, cmd_terminal_app },
+{ "Installer sur le disque", DESKTOP_ACTION_INSTALL, cmd_installer_app },
 { "Deconnexion", DESKTOP_ACTION_LOGOUT, (void*)0 },
 { "Redemarrer", DESKTOP_ACTION_REBOOT, (void*)0 },
 { "Eteindre", DESKTOP_ACTION_SHUTDOWN, (void*)0 }
@@ -502,44 +424,6 @@ desktop_reset_console_colors();
 
 
 /*
-    Installateur (shell/commands.c, cmd_install() -- deja
-    reserve a root et deja protege par une confirmation "OUI"
-    tapee au clavier) : reutilise tel quel via execute_command()
-    plutot que de reimplementer une boite de dialogue graphique
-    specifique pour une action aussi destructrice (efface le
-    disque de donnees).
-*/
-
-static void desktop_run_installer()
-{
-
-console_clear();
-
-desktop_draw_console_titlebar("Installateur");
-
-console_set_top_margin(1);
-
-
-char cmd[16] = "install";
-
-execute_command(cmd);
-
-
-console_write("\nAppuyez sur Entree pour revenir au bureau.\n");
-
-keyboard_flush();
-
-char dummy[8];
-
-input_readline(dummy, sizeof(dummy));
-
-
-desktop_reset_console_colors();
-
-}
-
-
-/*
     Traite une action SYSTEME (jamais une application-fenetre,
     voir "window_entry" ci-dessus, gerees separement au point
     d'appel). Renvoie 1 si gui_desktop_run() doit se terminer
@@ -552,19 +436,11 @@ static int desktop_run_system_action(desktop_action action)
 switch (action)
 {
 
-case DESKTOP_ACTION_TERMINAL:
-
-gui_cursor_erase();
-
-return desktop_run_terminal() ? 1 : 0;
-
 case DESKTOP_ACTION_LOGOUT: gui_cursor_erase(); return 1;
 
 case DESKTOP_ACTION_REBOOT: gui_cursor_erase(); desktop_run_reboot(); return 0;
 
 case DESKTOP_ACTION_SHUTDOWN: gui_cursor_erase(); desktop_run_shutdown(); return 0;
-
-case DESKTOP_ACTION_INSTALL: gui_cursor_erase(); desktop_run_installer(); return 0;
 
 default: return 0;
 
@@ -1087,21 +963,21 @@ break;
 
 /*
     Vraie photo (voir gui/assets/wallpaper_images.h), affichee
-    "en mosaique" : chaque pixel source (80x60 -- voir le
-    commentaire de wallpaper_images.h sur cette resolution
-    volontairement petite) devient un bloc de plusieurs pixels a
-    l'ecran, en repartissant la largeur/hauteur du rectangle
-    cible aussi uniformement que possible entre les pixels
-    source. Honnete sur la resolution reelle plutot que de
-    tenter un lissage qui masquerait la taille embarquee
-    minuscule (voir le commentaire de wallpaper_images.h sur les
-    contraintes de place qui l'imposent).
+    avec un LISSAGE BILINEAIRE plutot qu'en blocs bruts : pour
+    chaque pixel ecran, on interpole entre les 4 pixels source
+    les plus proches au lieu d'etaler chaque pixel source en un
+    seul bloc uni -- nettement moins "pixelise" a l'oeil pour
+    la meme resolution embarquee (voir wallpaper_images.h pour
+    les contraintes de taille qui la limitent). Arithmetique en
+    virgule fixe (8 bits de fraction) : ce noyau est compile
+    sans support flottant (-mno-sse/-mno-sse2, voir gui/icons.c
+    pour la meme contrainte deja rencontree).
 */
 
 void gui_paint_photo_area(u32 x, u32 y, u32 w, u32 h, u32 photo_index)
 {
 
-if (photo_index >= wallpaper_photo_count())
+if (photo_index >= wallpaper_photo_count() || w == 0 || h == 0)
 {
 
 return;
@@ -1112,41 +988,76 @@ return;
 const wallpaper_photo* photo = &WALLPAPER_PHOTOS[photo_index];
 
 
-for (u32 row = 0; row < photo->height; row++)
+if (photo->width < 2 || photo->height < 2)
+{
+
+return;
+
+}
+
+
+for (u32 py = 0; py < h; py++)
 {
 
 
-u32 block_y = y + (row * h) / photo->height;
+/*
+    Position source (en virgule fixe, 8 bits de fraction) :
+    fait correspondre le pixel ecran "py" a une position
+    FRACTIONNAIRE dans la photo, entre 0 et (height-1).
+*/
 
-u32 block_y_end = y + ((row + 1) * h) / photo->height;
+u32 sy_fixed = (h > 1) ? (py * (photo->height - 1) * 256) / (h - 1) : 0;
 
-u32 block_h = (block_y_end > block_y) ? (block_y_end - block_y) : 1;
+u32 y0 = sy_fixed >> 8;
+
+u32 frac_y = sy_fixed & 0xFF;
+
+u32 y1 = (y0 + 1 < photo->height) ? y0 + 1 : y0;
 
 
-for (u32 col = 0; col < photo->width; col++)
+for (u32 px = 0; px < w; px++)
 {
 
 
-u32 block_x = x + (col * w) / photo->width;
+u32 sx_fixed = (w > 1) ? (px * (photo->width - 1) * 256) / (w - 1) : 0;
 
-u32 block_x_end = x + ((col + 1) * w) / photo->width;
+u32 x0 = sx_fixed >> 8;
 
-u32 block_w = (block_x_end > block_x) ? (block_x_end - block_x) : 1;
+u32 frac_x = sx_fixed & 0xFF;
 
-
-u32 src_offset = (row * photo->width + col) * 3;
-
-u8 r = photo->rgb_data[src_offset];
-
-u8 g = photo->rgb_data[src_offset + 1];
-
-u8 b = photo->rgb_data[src_offset + 2];
+u32 x1 = (x0 + 1 < photo->width) ? x0 + 1 : x0;
 
 
-gfx_color pixel_color = ((gfx_color)r << 16) | ((gfx_color)g << 8) | (gfx_color)b;
+const u8* p00 = &photo->rgb_data[(y0 * photo->width + x0) * 3];
+
+const u8* p10 = &photo->rgb_data[(y0 * photo->width + x1) * 3];
+
+const u8* p01 = &photo->rgb_data[(y1 * photo->width + x0) * 3];
+
+const u8* p11 = &photo->rgb_data[(y1 * photo->width + x1) * 3];
 
 
-gfx_fill_rect(block_x, block_y, block_w, block_h, pixel_color);
+u8 out_rgb[3];
+
+
+for (int c = 0; c < 3; c++)
+{
+
+u32 top = (u32)p00[c] * (256 - frac_x) + (u32)p10[c] * frac_x;
+
+u32 bottom = (u32)p01[c] * (256 - frac_x) + (u32)p11[c] * frac_x;
+
+u32 blended = (top * (256 - frac_y) + bottom * frac_y) >> 16;
+
+out_rgb[c] = (u8)blended;
+
+}
+
+
+gfx_color pixel_color = ((gfx_color)out_rgb[0] << 16) | ((gfx_color)out_rgb[1] << 8) | (gfx_color)out_rgb[2];
+
+
+gfx_put_pixel(x + px, y + py, pixel_color);
 
 
 }
@@ -1600,9 +1511,10 @@ gui_window_focus(matched_window);
 
 
 /*
-    Raccourci clavier : Entree ouvre directement le terminal
-    integre (equivalent au clic sur son icone dans le Centre
-    d'applications), pour qui prefere le clavier a la souris.
+    Raccourci clavier : Entree ouvre directement le Terminal
+    (ou lui redonne le focus s'il est deja ouvert -- meme
+    logique que le Centre d'applications), pour qui prefere le
+    clavier a la souris.
 */
 
 if (!state.app_center_open && keyboard_available())
@@ -1613,18 +1525,20 @@ char c = keyboard_getchar();
 if (c == '\n')
 {
 
-if (desktop_run_system_action(DESKTOP_ACTION_TERMINAL))
+int existing = gui_window_find_by_entry(cmd_terminal_app);
+
+if (existing >= 0)
 {
 
-return;
+gui_window_focus(existing);
 
 }
+else
+{
 
-desktop_draw(&state);
+gui_window_open("Terminal", cmd_terminal_app);
 
-gui_cursor_reset();
-
-keyboard_flush();
+}
 
 was_pressed = 0;
 

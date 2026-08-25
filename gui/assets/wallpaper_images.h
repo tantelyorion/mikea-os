@@ -25,13 +25,14 @@
     Compromis assumes, dictes par la place reservee au noyau sur
     le disque de demarrage (600 secteurs = 300 Ko, voir
     boot/loader/stage2.asm, dap_kernel) :
-    - Resolution fixe de 80x60 pixels par photo (~14 Ko chacune,
-      ~84 Ko pour les 6) -- volontairement petite pour rester
-      tres en dessous de cette limite. Affichee "en mosaique"
-      (chaque pixel source devient un bloc de plusieurs pixels a
-      l'ecran, voir gui_paint_photo_area(), gui/desktop.c) plutot
-      qu'une image lissee -- honnete sur la resolution reelle
-      plutot que de la dissimuler.
+    - Resolution fixe de 112x84 pixels par photo (~28 Ko chacune,
+      ~165 Ko pour les 6) -- reste tres en dessous de cette
+      limite. Affichee avec un LISSAGE BILINEAIRE (voir
+      gui_paint_photo_area(), gui/desktop.c) plutot qu'en blocs
+      bruts non lisses : la resolution embarquee reste modeste,
+      mais le rendu final est nettement moins "pixelise" qu'un
+      agrandissement brut, meme pixel source devenu un seul bloc
+      uni.
     - RVB brut (3 octets/pixel), aucune compression : le plus
       simple et le plus sur a decoder correctement sans jamais
       risquer de plante sur un fichier corrompu -- au prix d'une
