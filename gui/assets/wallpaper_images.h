@@ -23,7 +23,8 @@
     de caracteres l'est deja (assets/fonts/font8x8_basic.h).
 
     Compromis assumes, dictes par la place reservee au noyau sur
-    le disque de demarrage (600 secteurs = 300 Ko, voir
+    le disque de demarrage (900 secteurs = 450 Ko depuis
+    l'ajout des sons systeme, voir kernel/drivers/soundblaster ;
     boot/loader/stage2.asm, dap_kernel) :
     - Resolution fixe de 112x84 pixels par photo (~28 Ko chacune,
       ~165 Ko pour les 6) -- reste tres en dessous de cette

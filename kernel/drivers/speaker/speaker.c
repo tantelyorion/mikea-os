@@ -2,6 +2,9 @@
 
 #include "../../cpu/io.h"
 
+#include "../soundblaster/sb16.h"
+#include "../soundblaster/sound_data.h"
+
 
 void console_write(const char* text);
 
@@ -142,7 +145,30 @@ speaker_off();
 void sound_play_startup()
 {
 
-/* Deux notes ascendantes, courtes -- accueil bref, pas envahissant. */
+/*
+    Correctif (vrai son de demarrage) : si une Sound Blaster 16
+    est detectee (voir kernel/kernel.c, sb16_init() -- section
+    HARDWARE INITIALIZATION, avant cet appel), on joue le vrai
+    clip audio fourni par l'utilisateur (converti hors ligne, voir
+    sound_data.h) plutot qu'un simple bip synthetique. Sur du
+    materiel/un emulateur sans Sound Blaster 16 (cas normal en
+    dehors de QEMU avec "-device sb16"), on retombe sur les deux
+    notes de PC Speaker ci-dessous -- meme logique de repli honnete
+    que power_shutdown() (kernel/drivers/power/power.c) quand
+    aucune methode d'extinction ACPI ne fonctionne.
+*/
+
+if (sb16_available())
+{
+
+sb16_play_pcm(startup_pcm, startup_pcm_len, SOUND_PCM_SAMPLE_RATE);
+
+return;
+
+}
+
+
+/* Repli : deux notes ascendantes, courtes -- accueil bref, pas envahissant. */
 
 speaker_beep(523, 90);
 
@@ -156,7 +182,19 @@ speaker_beep(784, 140);
 void sound_play_shutdown()
 {
 
-/* Deux notes descendantes -- symetrique de sound_play_startup(). */
+/* Voir le commentaire de sound_play_startup() ci-dessus : meme logique de repli. */
+
+if (sb16_available())
+{
+
+sb16_play_pcm(shutdown_pcm, shutdown_pcm_len, SOUND_PCM_SAMPLE_RATE);
+
+return;
+
+}
+
+
+/* Repli : deux notes descendantes -- symetrique de sound_play_startup(). */
 
 speaker_beep(784, 90);
 

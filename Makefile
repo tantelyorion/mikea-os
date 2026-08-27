@@ -112,6 +112,32 @@ endif
 TARGET_FLAG ?=
 
 
+# Choix du backend audio QEMU (carte son "-device sb16", voir
+# kernel/drivers/soundblaster) : QEMU ne devine pas tout seul quel
+# systeme audio de l'hote utiliser, et le mauvais choix ne fait pas
+# echouer QEMU mais le fait tourner MUET, silencieusement -- un
+# echec bien plus deroutant a diagnostiquer qu'une erreur franche.
+# Meme raisonnement que la detection Windows/macOS du bloc Clang
+# ci-dessus : "pulseaudio" convient a la grande majorite des
+# distributions Linux de bureau actuelles (y compris via le module
+# de compatibilite PipeWire-Pulse, tres largement deploye par
+# defaut), "coreaudio" est le backend natif macOS, et "dsound"
+# (DirectSound) celui de Windows. QEMU_AUDIODEV reste personnalisable
+# (ex. "make run QEMU_AUDIODEV=alsa" sur un Linux sans PulseAudio/
+# PipeWire, ou "sdl"/"none" pour un test sans materiel audio du
+# tout) pour qui a besoin d'un backend different.
+
+ifeq ($(origin QEMU_AUDIODEV),undefined)
+ifeq ($(OS),Windows_NT)
+QEMU_AUDIODEV := dsound
+else ifeq ($(shell uname -s 2>/dev/null),Darwin)
+QEMU_AUDIODEV := coreaudio
+else
+QEMU_AUDIODEV := pa
+endif
+endif
+
+
 
 # ------------------------------------------------------------
 # Flags
@@ -381,8 +407,8 @@ $(IMG): $(BOOT_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
 	# boot.asm+stage2.asm+kernel.bin ne remplit ce fichier que
 	# jusqu'a sa taille exacte (en general a peine plus que
 	# 49664 + quelques dizaines de Ko), alors que dap_kernel
-	# (boot/loader/stage2.asm) demande TOUJOURS 600 secteurs
-	# (300 Ko) a partir du LBA 97, quelle que soit la taille
+	# (boot/loader/stage2.asm) demande TOUJOURS 900 secteurs
+	# (450 Ko) a partir du LBA 97, quelle que soit la taille
 	# reelle du noyau (marge volontairement large, voir le
 	# commentaire de dap_kernel). Sans ce correctif, ce fichier
 	# etait donc systematiquement plus court que ce que la
@@ -392,7 +418,7 @@ $(IMG): $(BOOT_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
 	# lecture disque (noyau)" avant de figer la machine -- le
 	# noyau n'etait jamais charge, meme quand la compilation
 	# reussissait parfaitement. On complete donc ce fichier a
-	# 1 Mo (tres largement au-dessus des 340480 octets requis,
+	# 1 Mo (tres largement au-dessus des 510464 octets requis,
 	# de quoi laisser une bonne marge de croissance au noyau).
 
 	truncate -s 1M $(IMG)
@@ -428,9 +454,23 @@ $(DISK_IMG):
 
 run: $(IMG) $(DISK_IMG)
 
+	# Correctif (son de demarrage/extinction, kernel/drivers/
+	# soundblaster) : sans "-device sb16", QEMU n'expose AUCUNE
+	# carte son au noyau -- sb16_init() (kernel/kernel.c) echoue
+	# alors sa detection (comportement attendu et gere : repli
+	# silencieux sur le PC Speaker, voir kernel/drivers/speaker),
+	# et le vrai son embarque n'est jamais joue. "pcspk-audiodev"
+	# route aussi le PC Speaker de repli vers le meme backend audio
+	# hote (QEMU recent le rend sinon inaudible par defaut, meme
+	# comportement que sur la plupart des PC physiques actuels dont
+	# le haut-parleur interne a disparu).
+
 	qemu-system-x86_64 \
 	-drive format=raw,file=$(IMG) \
-	-drive format=raw,file=$(DISK_IMG)
+	-drive format=raw,file=$(DISK_IMG) \
+	-audiodev $(QEMU_AUDIODEV),id=snd0 \
+	-machine pcspk-audiodev=snd0 \
+	-device sb16,audiodev=snd0
 
 
 

@@ -351,6 +351,22 @@ mouse_init();
 pci_init();
 
 
+/*
+    Correctif (vrai son de demarrage/extinction) : detection de la
+    carte Sound Blaster 16 emulee (voir kernel/drivers/soundblaster,
+    et scripts/run.sh / Makefile pour les options QEMU
+    correspondantes). Doit s'executer avant le premier
+    sound_play_startup() plus bas -- sound_play_startup()/
+    sound_play_shutdown() (kernel/drivers/speaker/speaker.c)
+    verifient sb16_available() pour choisir entre le vrai clip
+    audio ou le repli PC Speaker.
+*/
+
+void sb16_init();
+
+sb16_init();
+
+
 
 
 /*

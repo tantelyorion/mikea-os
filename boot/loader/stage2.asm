@@ -72,8 +72,20 @@ out 0x92,al
 ; stage2.bin (complete pour occuper exactement ces 96
 ; secteurs, voir le "times" final de ce fichier, afin que cet
 ; emplacement soit fixe quelle que soit la taille reelle du
-; code de stage2). 600 secteurs (300 Ko) de marge sont lus,
+; code de stage2). 900 secteurs (450 Ko) de marge sont lus,
 ; largement suffisant pour ce noyau.
+;
+; Correctif (son de demarrage/extinction, kernel/drivers/
+; soundblaster) : la marge etait auparavant de 600 secteurs
+; (300 Ko), tres largement suffisante avant l'ajout des deux
+; clips audio embarques (sound_data.c, ~86 Ko a eux deux) --
+; le noyau depasse desormais cette ancienne limite. Portee a
+; 900 secteurs (450 Ko), avec une marge de croissance encore
+; confortable au-dela (voir aussi la limite de securite documentee
+; plus bas : le tampon reel bas de 0x10000 utilise pour ce
+; chargement doit rester sous 0xA0000, debut de la memoire video
+; VGA en mode reel -- 900 secteurs y laisse une marge large,
+; contrairement par exemple a 1200 qui la depasserait).
 ;
 ; Correctif critique (echouait TOUJOURS, quelle que soit la
 ; taille du fichier .img) : de tres nombreux BIOS -- dont
@@ -82,14 +94,14 @@ out 0x92,al
 ; secteurs au maximum (voir la Disk Address Packet : le champ
 ; "nombre de secteurs" fait 16 bits, mais la limite reelle
 ; imposee par le BIOS lui-meme est bien plus basse). Demander
-; 600 secteurs en un seul appel echoue donc systematiquement
+; 900 secteurs en un seul appel echoue donc systematiquement
 ; avec une erreur "parametre invalide" (drapeau carry), peu
 ; importe que le fichier disque sous-jacent soit assez grand
 ; ou non -- ce n'est pas une question de taille de fichier
 ; mais de taille de CHAQUE requete individuelle.
 ;
-; On decoupe donc la lecture en 6 appels de 100 secteurs
-; chacun (6*100 = 600, et 100 reste bien en dessous de la
+; On decoupe donc la lecture en 9 appels de 100 secteurs
+; chacun (9*100 = 900, et 100 reste bien en dessous de la
 ; limite de 127), en avancant a chaque iteration le LBA de
 ; depart et le segment de destination (l'offset reste
 ; toujours 0 : chaque bloc de 100 secteurs = 51200 octets =
@@ -97,7 +109,7 @@ out 0x92,al
 ; le depasser, ce qui evite tout probleme de franchissement
 ; de limite de segment).
 
-mov cx,6
+mov cx,9
 
 .read_kernel_chunk:
 
@@ -126,7 +138,7 @@ jnz .read_kernel_chunk
 ; disque du noyau echoue encore -- voir le correctif documente
 ; plus haut (limite de 127 secteurs par appel INT13h AH=0x42).
 ; Verifiez aussi, au cas ou, que l'image .img fait bien au
-; moins 65+600 secteurs (33280+307200 octets).
+; moins 97+900 secteurs (49664+460800 octets).
 
 mov si,msg_kernel_loaded
 call print_string_rm
@@ -595,10 +607,10 @@ times 256 db 0
 ; Disk Address Packet (DAP) pour la lecture LBA du noyau
 ; ------------------------------------------------------------
 ;
-; "dw 100" (et non 600) : voir le correctif documente plus
+; "dw 100" (et non 900) : voir le correctif documente plus
 ; haut, chaque appel INT13h AH=0x42 est limite a 127 secteurs
 ; par la plupart des BIOS (dont SeaBIOS/QEMU) -- 100 par appel,
-; repete 6 fois par la boucle ci-dessus, reste bien en dessous
+; repete 9 fois par la boucle ci-dessus, reste bien en dessous
 ; de cette limite. dap_kernel_seg et dap_kernel_lba sont
 ; modifies directement en memoire a chaque iteration (ce ne
 ; sont pas des constantes figees a l'assemblage).
@@ -669,7 +681,7 @@ mov esi,0x10000
 
 mov edi,0x100000
 
-mov ecx,(600*512)/4
+mov ecx,(900*512)/4
 
 cld
 
