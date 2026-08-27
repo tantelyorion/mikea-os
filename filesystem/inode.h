@@ -226,4 +226,21 @@ u32 inode_count();
 
 
 
+/*
+    Sauvegarde/recharge la table des inodes (inode_table, privee
+    a ce fichier) sur/depuis le vrai disque -- voir fs_layout.h
+    (FS_INODE_TABLE_START_BLOCK) et mkfs.c pour l'orchestration
+    complete. Correctif persistance disque (voir le commentaire
+    de fs_layout.h) : c'est cette table qui manquait pour que
+    les fichiers survivent reellement a un redemarrage -- leur
+    CONTENU (filesystem/block.c) etait deja ecrit sur le vrai
+    disque, mais devenait orphelin sans elle.
+*/
+
+void inode_table_save();
+
+void inode_table_load();
+
+
+
 #endif

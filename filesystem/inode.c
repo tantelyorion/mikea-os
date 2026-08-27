@@ -17,6 +17,12 @@
 
 #include "block.h"
 
+#include "disk.h"
+
+#include "fs_layout.h"
+
+#include "superblock.h"
+
 
 
 
@@ -25,10 +31,13 @@
 ====================================================
 INODE TABLE
 
-En mémoire pour l'instant.
-
-Sera sauvegardée sur disque ensuite.
-
+Correctif (persistance disque) : desormais sauvegardee/
+rechargee sur le vrai disque a chaque modification -- voir
+inode_table_save()/inode_table_load() plus bas, et fs_layout.h
+pour l'emplacement reserve. Reste un tableau en RAM au
+quotidien (toutes les fonctions ci-dessous continuent d'operer
+directement dessus, sans latence disque a chaque lecture) :
+seule la PERSISTANCE entre deux demarrages a change.
 
 ====================================================
 */
@@ -299,6 +308,28 @@ node->name[j]=0;
 current_inode_count++;
 
 
+/*
+    Correctif (compteur superbloc + persistance disque, voir
+    fs_layout.h) : meme raisonnement que block_allocate()
+    (filesystem/block.c) -- free_inodes etait fige, jamais mis
+    a jour ; inode_table_save() rend la creation persistante
+    immediatement (pas seulement le bloc de donnees deja
+    alloue plus haut).
+*/
+
+superblock* sb = superblock_get();
+
+if(sb->free_inodes > 0)
+{
+
+sb->free_inodes--;
+
+}
+
+
+inode_table_save();
+
+
 
 return node;
 
@@ -487,6 +518,16 @@ node->parent[0]=0;
 current_inode_count--;
 
 
+/* Correctif (compteur superbloc + persistance disque) : voir inode_create_ex() ci-dessus. */
+
+superblock* sb = superblock_get();
+
+sb->free_inodes++;
+
+
+inode_table_save();
+
+
 
 }
 
@@ -556,6 +597,88 @@ u32 inode_count()
 
 
 return current_inode_count;
+
+
+}
+
+
+
+/*
+====================================================
+SAVE / LOAD INODE TABLE (persistance disque)
+
+Voir fs_layout.h (FS_INODE_TABLE_START_BLOCK) et mkfs.c.
+Ecrit/relit directement le tableau brut (128 * sizeof(inode) =
+EXACTEMENT FS_INODE_TABLE_BLOCKS blocs de 512 octets, voir
+fs_layout.h) via disk_write_buffer()/disk_read_buffer() -- pas
+via block_write()/block_read(), qui operent sur des blocs de
+DONNEES (indices 0-2047 dans l'espace des blocs), alors que
+cette zone est une zone de METADONNEES a part, adressee
+directement en octets.
+Sauvegarde aussi le superbloc (superblock_write()) au passage,
+meme raisonnement que block_table_save() (filesystem/block.c)
+pour free_blocks : sans cela, free_inodes (mis a jour juste
+avant cet appel, dans inode_create_ex()/inode_delete()) ne
+serait persiste sur disque qu'au prochain appel de
+block_table_save() -- decale d'un cycle de creation/suppression
+par rapport a la valeur reelle en RAM.
+====================================================
+*/
+
+
+void inode_table_save()
+{
+
+
+disk_write_buffer(
+FS_INODE_TABLE_START_BLOCK * BLOCK_SIZE,
+(u8*)inode_table,
+sizeof(inode_table)
+);
+
+
+superblock_write();
+
+
+}
+
+
+
+void inode_table_load()
+{
+
+
+disk_read_buffer(
+FS_INODE_TABLE_START_BLOCK * BLOCK_SIZE,
+(u8*)inode_table,
+sizeof(inode_table)
+);
+
+
+/*
+    current_inode_count n'est pas serialise avec inode_table
+    (compteur derive, pas une information supplementaire) --
+    recalcule ici par un simple comptage, pour rester coherent
+    avec les entrees "used" qui viennent d'etre rechargees.
+*/
+
+current_inode_count = 0;
+
+for(
+u32 i=0;
+i<MAX_INODES;
+i++
+)
+{
+
+if(inode_table[i].used)
+{
+
+current_inode_count++;
+
+}
+
+}
 
 
 }

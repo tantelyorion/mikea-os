@@ -17,30 +17,27 @@
     Etat de ce module (pour eviter toute mauvaise
     interpretation par la suite) :
 
-    - superblock_init()/superblock_write()/superblock_load()/
-      superblock_get() sont completement implementees et
-      fonctionnelles, mais AUCUNE n'est appelee au-dela de
-      superblock_init() (voir filesystem/mkfs.c). Ce n'est pas
-      un oubli isole : comme le documente deja
-      filesystem/inode.c ("INODE TABLE -- En memoire pour
-      l'instant. Sera sauvegardee sur disque ensuite."), la
-      table des inodes elle-meme n'est pas persistee. Appeler
-      superblock_write() seule, sans les inodes qu'elle
-      decrit, donnerait une fausse impression de persistance
-      au redemarrage (le superblock survivrait, pas les
-      fichiers). Le branchement complet de ce module attend
-      donc ce travail de persistance des inodes, deja identifie
-      comme travail futur.
+    - Correctif (persistance disque) : superblock_write()/
+      superblock_load() sont desormais reellement utilisees
+      (voir filesystem/mkfs.c, fs_already_formatted()) --
+      elles servent en particulier a distinguer un disque de
+      donnees deja forme (on recharge) d'un disque vierge (on
+      formate), et le superbloc est reecrit a chaque
+      modification du bitmap des blocs (voir
+      block_table_save(), filesystem/block.c) pour rester
+      coherent avec free_blocks. Ce branchement attendait la
+      persistance de la table des inodes elle-meme (voir
+      inode_table_save()/load(), filesystem/inode.c) --
+      desormais fait, voir fs_layout.h pour la disposition
+      disque complete.
 
-    - free_blocks (2047) et free_inodes (128) sont des valeurs
-      FIXES ecrites une seule fois par superblock_init() : rien
-      ne les met a jour quand block_allocate()/block_free()
-      (filesystem/block.c) ou inode_create()/inode_delete()
-      (filesystem/inode.c) changent l'etat reel du systeme de
-      fichiers. Ne pas exposer ces deux champs (ex. via une
-      future commande shell "df"/"stat") tant qu'ils ne
-      refletent pas l'etat reel -- ce serait un affichage
-      fonctionnel mais faux, pire qu'une commande absente.
+    - free_blocks et free_inodes sont maintenant mis a jour a
+      chaque appel de block_allocate()/block_free()
+      (filesystem/block.c) et inode_create_ex()/inode_delete()
+      (filesystem/inode.c) -- ils refletent l'etat reel et
+      peuvent etre exposes (ex. une future commande shell
+      "df"/"stat") sans donner une fausse image du systeme de
+      fichiers.
 */
 
 
@@ -49,6 +46,8 @@
 #include "disk.h"
 
 #include "block.h"
+
+#include "fs_layout.h"
 
 
 
@@ -122,7 +121,15 @@ main_superblock.block_size = 512;
 main_superblock.total_blocks = 2048;
 
 
-main_superblock.free_blocks = 2047;
+/*
+    Correctif (persistance disque, voir fs_layout.h) : ce
+    n'est plus seulement le bloc 0 qui est reserve, mais tous
+    les blocs 0 a FS_FIRST_DATA_BLOCK-1 (superbloc + table des
+    inodes + bitmap des blocs) -- 2020 blocs de donnees
+    reellement disponibles desormais, et non 2047.
+*/
+
+main_superblock.free_blocks = TOTAL_BLOCKS - FS_FIRST_DATA_BLOCK;
 
 
 

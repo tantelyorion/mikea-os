@@ -35,8 +35,9 @@ projet, du tout premier octet exécuté par le BIOS jusqu'au shell.
 - **Multitâche coopératif/préemptif hybride** : un ordonnanceur
   round-robin, préemption par le minuteur.
 - **Système de fichiers** : pilote disque ATA (PIO) réel, structures
-  bloc/inode/répertoire/superbloc — **mais pas encore persistant**
-  d'un redémarrage à l'autre (voir plus bas).
+  bloc/inode/répertoire/superbloc, **désormais persistant** d'un
+  redémarrage à l'autre (table des inodes et bitmap des blocs
+  sérialisés sur `build/disk.img`, voir `filesystem/fs_layout.h`).
 - **Comptes utilisateurs et permissions** : connexion obligatoire,
   mots de passe hachés (FNV-1a, voir limites), permissions
   lecture/écriture/exécution par utilisateur.
@@ -57,7 +58,6 @@ projet, du tout premier octet exécuté par le BIOS jusqu'au shell.
 |---|---|
 | **Interface graphique** | Aucune (mode texte VGA uniquement, pas de pixels, pas de souris). `assets/` contient des icônes/polices/fonds d'écran réservés pour un futur pilote graphique, non utilisés. |
 | **Applications par défaut** | Aucune (pas de calculatrice, pas d'explorateur de fichiers graphique, pas de panneau de réglages). Seul le shell `msh` fait office de terminal. |
-| **Persistance disque** | Le pilote ATA réel existe, mais la table des inodes/répertoires reste en RAM : **tous les fichiers créés sont perdus au redémarrage.** |
 | **Isolation mémoire / Ring 3** | Aucune. Tout (shell, commandes, programmes `.mkx`) s'exécute au niveau privilège noyau. |
 | **Sécurité des mots de passe** | Hash FNV-1a (rapide, non cryptographique) — pas de SHA-256/bcrypt. |
 | **Gestionnaire de paquets** | `mpm install` ne fait qu'enregistrer un nom/version en mémoire, aucune extraction/installation binaire réelle. |
@@ -209,8 +209,8 @@ VBoxManage convertfromraw build/MikeaOS.img build/MikeaOS.vdi --format VDI
 ```
 Puis dans VirtualBox : Contrôleur de stockage → **Disque dur** (pas
 lecteur optique) → attacher `MikeaOS.vdi`. Faites de même pour
-`build/disk.img` sur un second contrôleur si vous voulez la persistance
-(actuellement non fonctionnelle de toute façon, voir plus haut).
+`build/disk.img` sur un second contrôleur pour la persistance
+(voir plus haut, section "Système de fichiers").
 
 ### Compte par défaut
 
@@ -401,18 +401,19 @@ Par ordre de priorité suggéré pour transformer ce projet en OS plus
 abouti (aucun n'est un correctif rapide — ce sont des chantiers à part
 entière) :
 
-1. **Persistance réelle du système de fichiers** — le plus proche
-   d'être terminé : `superblock_write()`/`superblock_load()` existent
-   déjà, il reste à sérialiser la table des inodes/répertoires.
-2. **Isolation mémoire (Ring 3, appels système)** — refonte
+1. **Isolation mémoire (Ring 3, appels système)** — refonte
    architecturale majeure, prérequis pour une exécution sûre de code
    utilisateur.
-3. **Hachage de mot de passe cryptographique** (SHA-256/bcrypt) à la
+2. **Hachage de mot de passe cryptographique** (SHA-256/bcrypt) à la
    place de FNV-1a.
-4. **Gestionnaire de paquets fonctionnel** — format `.mpk` réel,
+3. **Gestionnaire de paquets fonctionnel** — format `.mpk` réel,
    extraction, vérification de signature.
-5. **Détection matérielle dynamique** (CPUID, scan PCI) à la place des
+4. **Détection matérielle dynamique** (CPUID, scan PCI) à la place des
    pilotes à ports fixes.
-6. **Un vrai pilote graphique** (VESA/VBE ou GOP) — les assets
+5. **Un vrai pilote graphique** (VESA/VBE ou GOP) — les assets
    (`assets/icons`, `assets/wallpapers`, `assets/fonts`) sont déjà en
    place et n'attendent que ça.
+
+*(La persistance réelle du système de fichiers, qui figurait ici, est
+desormais faite — voir `filesystem/fs_layout.h` et le commentaire
+d'état en tête de `filesystem/superblock.c`.)*

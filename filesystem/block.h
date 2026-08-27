@@ -80,4 +80,22 @@ void block_free(
 
 
 
+/*
+    Sauvegarde/recharge le bitmap des blocs (block_table, prive
+    a ce fichier) sur/depuis le vrai disque -- voir fs_layout.h
+    (FS_BLOCK_BITMAP_START_BLOCK) et mkfs.c pour l'orchestration
+    complete avec inode_table_save()/load() (inode.c) et
+    superblock_write()/load() (superblock.c). Correctif
+    persistance disque : sans cela, le contenu des fichiers
+    survivait deja sur le disque (voir block_write()/
+    block_read() ci-dessous) mais devenait orphelin a chaque
+    redemarrage, faute de savoir quels blocs etaient occupes.
+*/
+
+void block_table_save();
+
+void block_table_load();
+
+
+
 #endif
