@@ -87,6 +87,38 @@ gfx_color theme_close_bg();
 gfx_color theme_close_symbol();
 
 
+/*
+    Feux tricolores macOS des deux autres boutons de barre de
+    titre (voir gui_draw_window(), gui/gui.c) -- jaune pour
+    reduire, vert pour agrandir, meme codage que le vrai macOS.
+    Seul theme_close_bg() (rouge) existait avant ce correctif :
+    c'etait le "seul accent de couleur du theme" mentionne plus
+    haut dans ce fichier -- desormais complete par l'accent bleu
+    ci-dessous et ces deux couleurs, demande explicitement pour
+    se rapprocher visuellement de macOS.
+*/
+
+gfx_color theme_minimize_bg();
+
+gfx_color theme_maximize_bg();
+
+
+/*
+    Accent bleu (façon macOS -- barre des taches/Dock active,
+    icone du Centre d'applications, elements selectionnes des
+    Parametres). Vient s'ajouter a la palette noir/blanc/gris
+    existante SANS la remplacer (voir le commentaire en tete de
+    ce fichier) : un seul point d'accent de plus, comme le rouge
+    du bouton de fermeture, pas un theme bleu general.
+*/
+
+gfx_color theme_accent();
+
+/* Texte/icone lisible PAR-DESSUS theme_accent() (blanc dans les deux modes -- le bleu choisi reste assez fonce pour ca). */
+
+gfx_color theme_accent_text();
+
+
 /* Couleur du curseur souris. */
 
 gfx_color theme_cursor();

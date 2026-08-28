@@ -231,32 +231,60 @@ gfx_draw_hline(px, py + titlebar_h - 1, pw, theme_border());
 if (title != (void*)0)
 {
 
-gfx_draw_text(px + 8 * GFX_SCALE, py + 2, title, theme_titlebar_text(), GFX_SCALE);
+/*
+    Correctif (barre de titre macOS) : titre CENTRE plutot
+    qu'aligne a gauche -- meme convention que macOS (les
+    feux tricolores occupent desormais la gauche, voir plus
+    bas, donc un titre aligne a gauche les chevaucherait).
+    Centrage approximatif par nombre de caracteres (pas de
+    largeur de police variable dans ce noyau -- chaque
+    caractere fait exactement 8*GFX_SCALE pixels de large,
+    voir gfx_draw_text()), suffisant pour une police a chasse
+    fixe.
+*/
+
+u32 title_len = 0;
+
+while (title[title_len] != 0) { title_len++; }
+
+u32 title_px_w = title_len * 8 * GFX_SCALE;
+
+u32 title_x = (pw > title_px_w) ? px + (pw - title_px_w) / 2 : px + 8 * GFX_SCALE;
+
+gfx_draw_text(title_x, py + 2, title, theme_titlebar_text(), GFX_SCALE);
 
 }
 
 
 /*
-    Boutons de barre de titre, alignes a droite, dans l'ordre
-    (de droite a gauche) fermer / agrandir / reduire -- seul
-    le bouton de fermeture garde un accent de couleur (rouge),
-    les deux autres restent en gris (texte), pas d'accent de
-    couleur supplementaire (voir gui/theme.c). Dessines en
-    dernier pour rester au-dessus du reste de la barre de
-    titre.
+    Feux tricolores macOS, alignes a GAUCHE (convention macOS --
+    Windows/GNOME les alignent a droite, voir le commentaire
+    precedent avant ce correctif), dans l'ordre fermer / reduire
+    / agrandir. De simples disques colores (voir gfx_fill_circle(),
+    kernel/drivers/graphics/graphics.c) sans glyphe dessus : le
+    vrai macOS n'affiche ses glyphes (x / - / +) qu'au survol de
+    la souris, un etat que ce noyau ne suit pas au pixel pres --
+    trois points de couleur nette restent parfaitement
+    reconnaissables sans eux.
 */
 
-u32 button_size = 8 * GFX_SCALE;
+u32 dot_radius = (u32)(2 * GFX_SCALE) + 1;
 
-u32 button_y = py + (titlebar_h - button_size) / 2;
+u32 dot_spacing = dot_radius * 2 + (u32)(3 * GFX_SCALE);
+
+u32 dot_cy = py + titlebar_h / 2;
 
 
-u32 close_x = px + pw - button_size - 4;
+u32 close_cx = px + 8 * GFX_SCALE + dot_radius;
+
+u32 close_x = close_cx - dot_radius;
+
+u32 button_y = dot_cy - dot_radius;
+
+u32 button_size = dot_radius * 2;
 
 
-gfx_fill_rect(close_x, button_y, button_size, button_size, theme_close_bg());
-
-gfx_draw_text(close_x, button_y, "x", theme_close_symbol(), GFX_SCALE);
+gfx_fill_circle(close_cx, dot_cy, dot_radius, theme_close_bg());
 
 
 if (bx != (void*)0) { *bx = close_x; }
@@ -266,86 +294,45 @@ if (by != (void*)0) { *by = button_y; }
 if (bsize != (void*)0) { *bsize = button_size; }
 
 
-u32 next_x = close_x;
-
-
-if (max_bx != (void*)0 && max_by != (void*)0 && max_bsize != (void*)0)
-{
-
-
-u32 max_x = next_x - button_size - 4;
-
-
-gfx_draw_rect(max_x, button_y, button_size, button_size, theme_button_border());
-
-
-if (is_maximized)
-{
-
-/*
-    Deux petits carres superposes = "restaurer" (icone
-    standard Windows/GNOME pour repasser de plein
-    ecran a une fenetre normale).
-*/
-
-u32 inset = button_size / 4;
-
-gfx_draw_rect(max_x + inset, button_y, button_size - inset, button_size - inset, theme_text());
-
-}
-else
-{
-
-/* Un seul carre plein = "agrandir". */
-
-if (button_size > 4)
-{
-
-gfx_draw_rect(max_x + 2, button_y + 2, button_size - 4, button_size - 4, theme_text());
-
-}
-
-}
-
-
-*max_bx = max_x;
-
-*max_by = button_y;
-
-*max_bsize = button_size;
-
-
-next_x = max_x;
-
-
-}
+u32 next_cx = close_cx;
 
 
 if (min_bx != (void*)0 && min_by != (void*)0 && min_bsize != (void*)0)
 {
 
 
-u32 min_x = next_x - button_size - 4;
+u32 min_cx = next_cx + dot_spacing;
+
+gfx_fill_circle(min_cx, dot_cy, dot_radius, theme_minimize_bg());
 
 
-gfx_draw_rect(min_x, button_y, button_size, button_size, theme_button_border());
+*min_bx = min_cx - dot_radius;
+
+*min_by = dot_cy - dot_radius;
+
+*min_bsize = button_size;
 
 
-/* Un simple trait horizontal en bas de la case = "reduire" (meme convention que Windows/GNOME). */
+next_cx = min_cx;
 
-if (button_size > 4)
-{
-
-gfx_draw_hline(min_x + 2, button_y + button_size - 4, button_size - 4, theme_text());
 
 }
 
 
-*min_bx = min_x;
+if (max_bx != (void*)0 && max_by != (void*)0 && max_bsize != (void*)0)
+{
 
-*min_by = button_y;
 
-*min_bsize = button_size;
+u32 max_cx = next_cx + dot_spacing;
+
+gfx_fill_circle(max_cx, dot_cy, dot_radius, theme_maximize_bg());
+
+
+*max_bx = max_cx - dot_radius;
+
+*max_by = dot_cy - dot_radius;
+
+*max_bsize = button_size;
 
 
 }

@@ -70,6 +70,35 @@ block_table[i]=0;
 }
 
 
+/*
+    Correctif (exactitude de l'espace disque affiche, voir
+    apps/settings/settings.c) : les blocs 0 a FS_FIRST_DATA_BLOCK-1
+    (superbloc, table des inodes, bitmap des blocs -- voir
+    fs_layout.h) sont REELLEMENT occupes des le formatage, mais
+    rien ne les marquait "utilises" dans block_table lui-meme --
+    seul block_allocate() (plus bas) sait les eviter. Tout code
+    qui compte l'espace libre en lisant directement block_table
+    (block_is_free(), utilise par le panneau "Systeme" des
+    Parametres) les comptait donc a tort comme libres. Les
+    marquer ici, une fois pour toutes au formatage, rend
+    block_table exact pour n'importe quel lecteur futur, sans
+    connaissance particuliere de fs_layout.h.
+*/
+
+for(
+u32 i = 0;
+i < FS_FIRST_DATA_BLOCK;
+i++
+)
+{
+
+
+block_table[i]=1;
+
+
+}
+
+
 
 }
 

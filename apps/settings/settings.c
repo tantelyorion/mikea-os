@@ -13,6 +13,10 @@
 #include "../../kernel/drivers/speaker/speaker.h"
 
 #include "../../filesystem/block.h"
+
+#include "../../kernel/memory/heap.h"
+#include "../../kernel/drivers/rtc/rtc.h"
+
 #include "../../shell/msh.h"
 
 
@@ -189,7 +193,16 @@ theme_is_dark() ? "Theme : Sombre" : "Theme : Clair",
 gui_draw_text(win_x + 1, win_y + 11, "Fond d'ecran :", theme_text_attr());
 
 
-int swatch_cell_w = 4, swatch_cell_h = 3;
+/*
+    Correctif (chevauchement avec le bouton "Deconnexion",
+    voir plus bas) : vignettes ramenees de 3 a 2 lignes de
+    haut, pour degager la place necessaire aux nouvelles
+    informations systeme (RAM, date/heure) sans depasser la
+    hauteur maximale de fenetre a la plus petite resolution
+    prise en charge (640x480, voir max_win_h plus haut).
+*/
+
+int swatch_cell_w = 4, swatch_cell_h = 2;
 
 int current_photo = wallpaper_get_photo_index();
 
@@ -254,7 +267,7 @@ while (style_name[si] && pi < 39) { pattern_label[pi++] = style_name[si++]; }
 pattern_label[pi] = 0;
 
 
-gui_draw_button(win_x + 1, win_y + 15, win_w - 2, 2, pattern_label, &pattern_btn_x, &pattern_btn_y, &pattern_btn_w, &pattern_btn_h);
+gui_draw_button(win_x + 1, win_y + 14, win_w - 2, 2, pattern_label, &pattern_btn_x, &pattern_btn_y, &pattern_btn_w, &pattern_btn_h);
 
 }
 
@@ -268,20 +281,31 @@ gui_draw_button(win_x + 1, win_y + 15, win_w - 2, 2, pattern_label, &pattern_btn
 */
 
 gui_draw_button(
-win_x + 1, win_y + 18, win_w - 2, 2,
+win_x + 1, win_y + 16, win_w - 2, 2,
 sound_is_enabled() ? "Son : Active (cliquer pour tester)" : "Son : Desactive",
 &sound_btn_x, &sound_btn_y, &sound_btn_w, &sound_btn_h
 );
 
 
+
 /*
-    Espace disque : information systeme de base, absente
-    jusqu'ici de tout le systeme (aucune commande shell ni
-    aucun ecran ne l'affichait). Calculee a chaque redessin
-    (pas a chaque image) en comptant les blocs libres parmi
-    TOTAL_BLOCKS (filesystem/block.h) -- 2048 iterations tout
-    au plus, negligeable pour un evenement aussi rare qu'un
-    redessin de cette fenetre.
+    Espace disque + informations systeme : bloc d'informations
+    de base, absent jusqu'ici de tout le systeme (aucune
+    commande shell ni aucun ecran ne l'affichait). Espace disque
+    calcule a chaque redessin (pas a chaque image) en comptant
+    les blocs libres parmi TOTAL_BLOCKS (filesystem/block.h) --
+    2048 iterations tout au plus, negligeable pour un evenement
+    aussi rare qu'un redessin de cette fenetre.
+
+    Correctif (chevauchement avec le bouton "Deconnexion") :
+    cette ligne etait auparavant dessinee a la meme rangee que
+    ce bouton (win_y + 21, alors que "Deconnexion" commence a
+    win_y + win_h - 6, soit la meme rangee des que win_h <= 27
+    -- systematique a la resolution minimale 640x480, voir
+    max_win_h plus haut) : le texte et le bouton se
+    chevauchaient, illisibles. Deplacee plus haut (win_y + 18),
+    dans l'espace degage par le redimensionnement des vignettes
+    de fond d'ecran ci-dessus.
 */
 
 {
@@ -356,9 +380,137 @@ while (suffix[s] && i < 47) { line[i++] = suffix[s]; s++; }
 line[i] = 0;
 
 
-gui_draw_text(win_x + 1, win_y + 21, line, theme_text_attr());
+gui_draw_text(win_x + 1, win_y + 18, line, theme_text_attr());
 
 }
+
+
+/*
+    Section "Systeme" (demandee explicitement -- absente
+    jusqu'ici) : memoire (tas noyau, voir kernel/memory/heap.c)
+    et date/heure reelle (puce RTC/CMOS, voir
+    kernel/drivers/rtc/rtc.c -- jusqu'ici seule l'horloge de
+    fonctionnement HH:MM de la barre de menu, gui/desktop.c,
+    exposait quoi que ce soit lie au temps).
+*/
+
+{
+
+u32 heap_used, heap_total;
+
+heap_stats(&heap_used, &heap_total);
+
+
+u32 used_kb = heap_used / 1024;
+
+u32 total_kb2 = heap_total / 1024;
+
+
+rtc_time now;
+
+rtc_read(&now);
+
+
+char line[48];
+
+int i = 0;
+
+
+const char* ram_label = "RAM : ";
+
+int r = 0;
+
+while (ram_label[r] && i < 47) { line[i++] = ram_label[r++]; }
+
+
+u32 v = used_kb;
+
+char tmp[12];
+
+int t = 0;
+
+if (v == 0) { tmp[t++] = '0'; }
+
+while (v > 0) { tmp[t++] = (char)('0' + (v % 10)); v /= 10; }
+
+while (t > 0 && i < 47) { t--; line[i++] = tmp[t]; }
+
+
+line[i++] = '/';
+
+
+v = total_kb2;
+
+t = 0;
+
+if (v == 0) { tmp[t++] = '0'; }
+
+while (v > 0) { tmp[t++] = (char)('0' + (v % 10)); v /= 10; }
+
+while (t > 0 && i < 47) { t--; line[i++] = tmp[t]; }
+
+
+const char* ko_date = " Ko - ";
+
+int kd = 0;
+
+while (ko_date[kd] && i < 47) { line[i++] = ko_date[kd++]; }
+
+
+/* Date au format JJ/MM/AAAA HH:MM, chiffres avec zero initial (ex. "05/03/2026 09:07"). */
+
+u8 fields2[4] = { now.day, now.month, 0, 0 };
+
+for (int f = 0; f < 2 && i < 44; f++)
+{
+
+line[i++] = (char)('0' + (fields2[f] / 10));
+
+line[i++] = (char)('0' + (fields2[f] % 10));
+
+line[i++] = (f == 0) ? '/' : ' ';
+
+}
+
+
+u32 year = now.year;
+
+char ytmp[5];
+
+ytmp[0] = (char)('0' + (year / 1000) % 10);
+
+ytmp[1] = (char)('0' + (year / 100) % 10);
+
+ytmp[2] = (char)('0' + (year / 10) % 10);
+
+ytmp[3] = (char)('0' + year % 10);
+
+for (int y = 0; y < 4 && i < 44; y++) { line[i++] = ytmp[y]; }
+
+if (i < 46) { line[i++] = ' '; }
+
+
+u8 fields3[2] = { now.hour, now.minute };
+
+for (int f = 0; f < 2 && i < 46; f++)
+{
+
+line[i++] = (char)('0' + (fields3[f] / 10));
+
+line[i++] = (char)('0' + (fields3[f] % 10));
+
+if (f == 0 && i < 47) { line[i++] = ':'; }
+
+}
+
+
+line[i] = 0;
+
+
+gui_draw_text(win_x + 1, win_y + 19, line, theme_text_attr());
+
+}
+
 
 
 was_pressed = mouse_left_pressed();

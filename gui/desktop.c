@@ -80,20 +80,17 @@ static void desktop_reset_console_colors();
 #define GFX_SCALE 2
 
 
-static u32 desktop_cols()
-{
-
-return gfx_width() / (8 * GFX_SCALE);
-
-}
-
-
-static u32 desktop_rows()
-{
-
-return gfx_height() / (8 * GFX_SCALE);
-
-}
+/*
+    Correctif (interface macOS) : desktop_cols()/desktop_rows()
+    (nombre de cellules texte 8x8 a l'ecran) servaient a
+    positionner l'ancienne barre des taches/le Centre
+    d'applications en unites de cellules. Le nouveau Dock/
+    Launchpad et la barre de menu (voir desktop_draw_taskbar(),
+    desktop_draw_menubar(), desktop_draw_app_center() plus bas)
+    calculent tous leurs positionnements directement en pixels
+    (gfx_width()/gfx_height()) pour un centrage exact -- ces deux
+    fonctions n'ont plus d'appelant.
+*/
 
 
 /*
@@ -341,6 +338,34 @@ static const app_center_entry APP_CENTER_ENTRIES[APP_CENTER_ENTRY_COUNT] = {
 };
 
 
+/*
+    Raccourcis EPINGLES du Dock (voir desktop_draw_taskbar()
+    plus bas), a cote de l'icone du Centre d'applications --
+    demande explicitement, meme principe que les icones
+    epinglees a gauche du separateur dans le Dock macOS. Un
+    sous-ensemble volontairement court des entrees ci-dessus
+    (les plus utilisees) : le Centre d'applications reste le
+    seul endroit qui liste TOUT.
+*/
+
+#define DOCK_SHORTCUT_COUNT 3
+
+typedef struct
+{
+
+void (*window_entry)();
+
+desktop_action icon_action;
+
+} dock_shortcut;
+
+static const dock_shortcut DOCK_SHORTCUTS[DOCK_SHORTCUT_COUNT] = {
+{ cmd_files, DESKTOP_ACTION_FILES },
+{ cmd_terminal_app, DESKTOP_ACTION_TERMINAL },
+{ cmd_settings, DESKTOP_ACTION_SETTINGS }
+};
+
+
 static void icon_draw_for_action(desktop_action action, u32 px, u32 py, u32 size, gfx_color color)
 {
 
@@ -368,6 +393,46 @@ case DESKTOP_ACTION_SHUTDOWN: icon_draw_power(px, py, size, color); break;
 case DESKTOP_ACTION_INSTALL: icon_draw_disk(px, py, size, color); break;
 
 }
+
+}
+
+
+/*
+    Retrouve l'icone d'une fenetre OUVERTE (Dock, voir
+    desktop_draw_taskbar()) en retrouvant son entree parmi
+    APP_CENTER_ENTRIES par la fonction de lancement -- c'est
+    cette fonction, pas le titre affiche, qui identifie
+    l'application de facon fiable (deux fenetres pourraient en
+    theorie partager un titre). Repli tres rare (fenetre lancee
+    autrement que depuis le Centre d'applications, aucun cas
+    reel aujourd'hui) : premiere lettre du titre.
+*/
+
+static void icon_draw_for_window(const gui_window_slot* w, u32 px, u32 py, u32 size, gfx_color color)
+{
+
+for (int i = 0; i < APP_CENTER_ENTRY_COUNT; i++)
+{
+
+if (APP_CENTER_ENTRIES[i].window_entry == w->entry)
+{
+
+icon_draw_for_action(APP_CENTER_ENTRIES[i].action, px, py, size, color);
+
+return;
+
+}
+
+}
+
+
+char buf[2];
+
+buf[0] = w->title[0];
+
+buf[1] = 0;
+
+gfx_draw_text(px + size / 4, py + size / 4, buf, color, GFX_SCALE);
 
 }
 
@@ -463,6 +528,8 @@ desktop_hitbox apps_button;
 
 desktop_hitbox window_buttons[GUI_MAX_WINDOWS];
 
+desktop_hitbox dock_shortcuts[DOCK_SHORTCUT_COUNT];
+
 int app_center_open;
 
 desktop_hitbox app_center_entries[APP_CENTER_ENTRY_COUNT];
@@ -473,93 +540,109 @@ desktop_hitbox app_center_panel;
 
 
 /*
-    Barre des taches : une icone fixe ("Toutes les
-    applications", grille 3x3, meme motif que le bouton de
-    demarrage de Windows 11 ou le tiroir d'applications GNOME/
-    Android), puis UNE LIGNE PAR FENETRE ACTUELLEMENT OUVERTE
-    (voir gui/window.c) -- qu'elle soit reduite ou non. Cliquer
-    dessus lui redonne le focus (la restaure si elle etait
-    reduite). C'est ce qui remplace l'ancienne liste fixe
-    d'icones : le nombre de boutons reflete desormais ce qui
-    tourne reellement, pas une liste figee d'applications
-    possibles.
+    Barre de menu superieure, façon macOS : bande fine et
+    quasi-opaque en haut de l'ecran, nom du systeme a gauche,
+    horloge ancree a droite (deplacee ici depuis l'ancien
+    emplacement bas-droite du Dock, voir desktop_draw_taskbar()
+    plus bas -- convention macOS, contrairement a
+    Windows/GNOME qui la placent en bas).
 */
+
+#define MENUBAR_H (12 * GFX_SCALE)
+
+
+static void desktop_draw_menubar()
+{
+
+
+u32 screen_w = gfx_width();
+
+
+gfx_fill_rect_blend(0, 0, screen_w, MENUBAR_H, theme_titlebar_bg(), 95);
+
+gfx_draw_hline(0, MENUBAR_H - 1, screen_w, theme_border());
+
+
+u32 text_y = (MENUBAR_H - 8 * GFX_SCALE) / 2;
+
+
+gfx_draw_text(8 * GFX_SCALE, text_y, "MikeaOS", theme_titlebar_text(), GFX_SCALE);
+
+
+char clock_text[16];
+
+format_walltime(clock_text);
+
+
+u32 clock_len = 0;
+
+while (clock_text[clock_len] != 0) { clock_len++; }
+
+u32 clock_px_w = clock_len * 8 * GFX_SCALE;
+
+u32 clock_x = screen_w - clock_px_w - 8 * GFX_SCALE;
+
+
+gfx_draw_text(clock_x, text_y, clock_text, theme_titlebar_text(), GFX_SCALE);
+
+
+}
+
+
+/*
+    Dock, façon macOS : barre "verre depoli" a coins arrondis,
+    CENTREE horizontalement et flottant a quelques pixels du bas
+    de l'ecran (contrairement a l'ancienne barre des taches,
+    pleine largeur et ancree a gauche, façon Windows 11/GNOME).
+    De gauche a droite : icone du Centre d'applications
+    ("Launchpad"), separateur, raccourcis EPINGLES
+    (DOCK_SHORTCUTS -- demande explicitement, "a cote" du Centre
+    d'applications), puis -- seulement s'il y en a -- un second
+    separateur et UNE ICONE PAR FENETRE ACTUELLEMENT OUVERTE
+    (avec un point d'accent bleu en dessous des fenetres non
+    reduites, meme codage que le petit point macOS sous les
+    applications en cours d'execution). Icones seules, sans
+    libelle textuel, comme le vrai Dock macOS -- ce qui
+    distingue le plus cette barre de l'ancienne liste de boutons
+    texte.
+*/
+
+#define DOCK_ICON_SIZE (18 * GFX_SCALE)
+#define DOCK_GAP (5 * GFX_SCALE)
+#define DOCK_PADDING (6 * GFX_SCALE)
+#define DOCK_SEP_W (1 * GFX_SCALE)
+#define DOCK_SEP_MARGIN (5 * GFX_SCALE)
+#define DOCK_BOTTOM_MARGIN (8 * GFX_SCALE)
+
 
 static void desktop_draw_taskbar(desktop_state* state)
 {
 
 
-u32 cols = desktop_cols();
+u32 screen_w = gfx_width();
 
-u32 rows = desktop_rows();
-
-
-int taskbar_h = 2;
-
-int taskbar_y = (int)rows - taskbar_h;
+u32 screen_h = gfx_height();
 
 
-u32 tpx = 0;
-
-u32 tpy = (u32)taskbar_y * 8 * GFX_SCALE;
-
-u32 tpw = cols * 8 * GFX_SCALE;
-
-u32 tph = (u32)taskbar_h * 8 * GFX_SCALE;
-
-
-gfx_fill_rect_blend(tpx, tpy, tpw, tph, theme_titlebar_bg(), 92);
-
-gfx_draw_hline(tpx, tpy, tpw, theme_border());
-
-
-u32 button_size = (u32)taskbar_h * 8 * GFX_SCALE;
-
-u32 icon_padding = button_size / 5;
-
-u32 icon_size = button_size - 2 * icon_padding;
-
-
-/* Bouton "Toutes les applications". */
-
-gfx_fill_rect_blend(0, tpy, button_size, tph, theme_button_bg(), 92);
-
-icon_draw_grid(icon_padding, tpy + icon_padding, icon_size, theme_text());
-
-state->apps_button.x = 0;
-
-state->apps_button.y = tpy;
-
-state->apps_button.w = button_size;
-
-state->apps_button.h = tph;
-
-
-gfx_draw_vline(button_size, tpy, tph, theme_border());
-
+/* Fenetres actuellement ouvertes (voir gui/window.c) -- determine la largeur du Dock et sa portion droite. */
 
 /*
-    Une ligne par fenetre ouverte, dans l'ordre des slots (voir
-    gui/window.c). "win_col" avance en cellules de texte, pas
-    en pixels (gui_draw_button() attend des cellules) --
-    s'arrete avant d'empieter sur l'horloge si trop de fenetres
-    sont ouvertes en meme temps (degradation propre plutot
-    qu'un chevauchement illisible).
+    Fenetres ouvertes dont l'application EST DEJA epinglee
+    (DOCK_SHORTCUTS ci-dessus) sont exclues d'ici : elles
+    restent visibles via le point d'accent sous leur icone
+    epinglee (voir la boucle DOCK_SHORTCUTS plus haut) --
+    exactement comme le vrai Dock macOS, qui n'affiche jamais
+    deux fois la meme application. Sans ce filtre, ouvrir le
+    Terminal (epingle par defaut) faisait apparaitre deux
+    icones Terminal cote a cote.
 */
 
-int win_col = (int)(button_size / (8 * GFX_SCALE)) + 1;
+int open_slots[GUI_MAX_WINDOWS];
 
-int win_btn_w = 8;
-
-int clock_reserved = 7; /* "HH:MM" + marge */
-
+int open_count = 0;
 
 for (int i = 0; i < GUI_MAX_WINDOWS; i++)
 {
-
-
-state->window_buttons[i].w = 0;
-
 
 const gui_window_slot* w = gui_window_get(i);
 
@@ -571,193 +654,369 @@ continue;
 }
 
 
-if (win_col + win_btn_w > (int)cols - clock_reserved)
+int is_pinned = 0;
+
+for (int p = 0; p < DOCK_SHORTCUT_COUNT; p++)
 {
 
-/* Plus de place : les fenetres suivantes n'apparaissent pas dans la barre (rare, ecran tres etroit ou tres nombreuses fenetres). */
+if (DOCK_SHORTCUTS[p].window_entry == w->entry)
+{
+
+is_pinned = 1;
 
 break;
 
 }
 
+}
 
-char label[10];
 
-int k = 0;
-
-while (w->title[k] != 0 && k < 8)
+if (is_pinned)
 {
 
-label[k] = w->title[k];
-
-k++;
+continue;
 
 }
 
-label[k] = 0;
+
+open_slots[open_count] = i;
+
+open_count++;
+
+}
 
 
-u32 bx, by, bw, bh;
+int total_icons = 1 + DOCK_SHORTCUT_COUNT + open_count;
 
-gui_draw_button(win_col, taskbar_y, win_btn_w, taskbar_h, label, &bx, &by, &bw, &bh);
+u32 icons_w = (u32)total_icons * DOCK_ICON_SIZE + (u32)(total_icons - 1) * DOCK_GAP;
+
+u32 sep_w = DOCK_SEP_W + DOCK_SEP_MARGIN * 2;
+
+u32 seps_w = (open_count > 0) ? sep_w * 2 : sep_w;
 
 
-/*
-    Petit repere sous le libelle pour distinguer une fenetre
-    reduite (attend en arriere-plan) d'une fenetre active --
-    simple trait, pas une couleur differente (voir gui/theme.c,
-    un seul accent de couleur dans tout le theme).
-*/
+u32 dock_w = DOCK_PADDING * 2 + icons_w + seps_w;
+
+u32 dock_h = DOCK_PADDING * 2 + DOCK_ICON_SIZE;
+
+
+u32 dock_x = (screen_w > dock_w) ? (screen_w - dock_w) / 2 : 0;
+
+u32 dock_y = screen_h - dock_h - DOCK_BOTTOM_MARGIN;
+
+
+gfx_fill_rect_blend(dock_x + 3, dock_y + 3, dock_w, dock_h, theme_shadow(), 18);
+
+gfx_fill_rounded_rect_blend(dock_x, dock_y, dock_w, dock_h, DOCK_ICON_SIZE / 2, theme_titlebar_bg(), 80);
+
+
+u32 icon_y = dock_y + DOCK_PADDING;
+
+u32 cursor_x = dock_x + DOCK_PADDING;
+
+
+/* Icone "Launchpad" (Centre d'applications) : grille 3x3, meme motif que le bouton "Toutes les applications" d'origine. */
+
+icon_draw_grid(cursor_x, icon_y, DOCK_ICON_SIZE, theme_accent());
+
+state->apps_button.x = cursor_x;
+
+state->apps_button.y = dock_y;
+
+state->apps_button.w = DOCK_ICON_SIZE;
+
+state->apps_button.h = dock_h;
+
+cursor_x += DOCK_ICON_SIZE + DOCK_GAP;
+
+
+/* Separateur avant les raccourcis epingles. */
+
+cursor_x += DOCK_SEP_MARGIN;
+
+gfx_draw_vline(cursor_x, icon_y, DOCK_ICON_SIZE, theme_border());
+
+cursor_x += DOCK_SEP_W + DOCK_SEP_MARGIN;
+
+
+/* Raccourcis epingles (voir DOCK_SHORTCUTS plus haut). */
+
+for (int i = 0; i < DOCK_SHORTCUT_COUNT; i++)
+{
+
+icon_draw_for_action(DOCK_SHORTCUTS[i].icon_action, cursor_x, icon_y, DOCK_ICON_SIZE, theme_text());
+
+
+if (gui_window_find_by_entry(DOCK_SHORTCUTS[i].window_entry) >= 0)
+{
+
+gfx_fill_circle(cursor_x + DOCK_ICON_SIZE / 2, dock_y + dock_h - (u32)(2 * GFX_SCALE), (u32)GFX_SCALE, theme_accent());
+
+}
+
+
+state->dock_shortcuts[i].x = cursor_x;
+
+state->dock_shortcuts[i].y = dock_y;
+
+state->dock_shortcuts[i].w = DOCK_ICON_SIZE;
+
+state->dock_shortcuts[i].h = dock_h;
+
+
+cursor_x += DOCK_ICON_SIZE + DOCK_GAP;
+
+}
+
+
+/* Une icone par fenetre ouverte -- seulement si au moins une l'est (sinon, pas de second separateur "pour rien"). */
+
+for (int i = 0; i < GUI_MAX_WINDOWS; i++)
+{
+
+state->window_buttons[i].w = 0;
+
+}
+
+
+if (open_count > 0)
+{
+
+
+cursor_x += DOCK_SEP_MARGIN;
+
+gfx_draw_vline(cursor_x, icon_y, DOCK_ICON_SIZE, theme_border());
+
+cursor_x += DOCK_SEP_W + DOCK_SEP_MARGIN;
+
+
+for (int k = 0; k < open_count; k++)
+{
+
+int slot = open_slots[k];
+
+const gui_window_slot* w = gui_window_get(slot);
+
+
+icon_draw_for_window(w, cursor_x, icon_y, DOCK_ICON_SIZE, theme_text());
+
 
 if (!w->minimized)
 {
 
-gfx_draw_hline(bx + 2, by + bh - 3, bw - 4, theme_text());
+gfx_fill_circle(cursor_x + DOCK_ICON_SIZE / 2, dock_y + dock_h - (u32)(2 * GFX_SCALE), (u32)GFX_SCALE, theme_accent());
 
 }
 
 
-state->window_buttons[i].x = bx;
+state->window_buttons[slot].x = cursor_x;
 
-state->window_buttons[i].y = by;
+state->window_buttons[slot].y = dock_y;
 
-state->window_buttons[i].w = bw;
+state->window_buttons[slot].w = DOCK_ICON_SIZE;
 
-state->window_buttons[i].h = bh;
+state->window_buttons[slot].h = dock_h;
 
 
-win_col += win_btn_w + 1;
+cursor_x += DOCK_ICON_SIZE + DOCK_GAP;
+
+}
 
 
 }
 
 
-/* Horloge, ancree a droite. */
+desktop_draw_menubar();
 
-char clock_text[16];
 
-format_walltime(clock_text);
+}
 
-int clock_w = 5; /* "HH:MM" */
 
-int clock_x = (int)cols - clock_w - 1;
+#define LAUNCHPAD_COLS 5
 
-if (clock_x - 1 > win_col)
-{
+#define LAUNCHPAD_CELL_W (14 * 8)
+
+#define LAUNCHPAD_CELL_H (13 * 8)
+
+#define LAUNCHPAD_ICON_SIZE (14 * GFX_SCALE)
 
 /*
-    gui_draw_text() aligne toujours le texte sur le HAUT de
-    sa cellule -- sur une barre haute de 2 cellules, ca
-    laissait l'horloge collee en haut avec un vide en
-    dessous. Position pixel calculee directement pour un
-    centrage vertical exact, comme gui_draw_field().
+    Correctif (chevauchement des libelles) : les libellés
+    (jusqu'a "Installer sur le disque", 24 caracteres) etaient
+    dessines a l'echelle GFX_SCALE (2, soit 16px/caractere) dans
+    des cellules bien trop etroites pour ca -- le texte de
+    chaque cellule debordait largement sur ses voisines,
+    illisible. Deux corrections : une echelle de texte plus
+    petite specifique aux libelles (1, soit 8px/caractere), et
+    une troncature (avec "..") de tout libelle qui ne tiendrait
+    toujours pas dans la largeur d'une cellule.
 */
 
-u32 clock_px = (u32)clock_x * 8 * GFX_SCALE;
+#define LAUNCHPAD_LABEL_SCALE 1
 
-u32 clock_py = tpy + (tph - 8 * GFX_SCALE) / 2;
-
-gfx_draw_text(clock_px, clock_py, clock_text, theme_titlebar_text(), GFX_SCALE);
-
-}
-
-}
-
-
-#define APP_CENTER_ROW_H 2
-
-#define APP_CENTER_WIDTH 22
+#define LAUNCHPAD_LABEL_MAX_CHARS ((LAUNCHPAD_CELL_W - 4) / (8 * LAUNCHPAD_LABEL_SCALE))
 
 
 /*
-    Centre d'applications : panneau "verre depoli" ancre juste
-    au-dessus du bouton "Toutes les applications", meme
-    principe que le menu Demarrer de Windows 11 ou le tiroir
-    d'applications GNOME -- une icone + un libelle par entree,
-    les actions systeme separees du reste par une ligne fine.
+    Copie "label" dans "out" (taille "out_size"), tronque a
+    LAUNCHPAD_LABEL_MAX_CHARS caracteres avec un "..." final si
+    besoin -- voir le commentaire de LAUNCHPAD_LABEL_SCALE
+    ci-dessus.
+*/
+
+static void launchpad_truncate_label(const char* label, char* out, u32 out_size)
+{
+
+u32 len = 0;
+
+while (label[len] != 0) { len++; }
+
+
+if (len <= LAUNCHPAD_LABEL_MAX_CHARS || out_size < 4)
+{
+
+u32 i = 0;
+
+while (label[i] != 0 && i < out_size - 1) { out[i] = label[i]; i++; }
+
+out[i] = 0;
+
+return;
+
+}
+
+
+u32 keep = LAUNCHPAD_LABEL_MAX_CHARS - 2;
+
+if (keep > out_size - 4) { keep = out_size - 4; }
+
+
+u32 i = 0;
+
+while (i < keep) { out[i] = label[i]; i++; }
+
+out[i] = '.'; out[i+1] = '.'; out[i+2] = 0;
+
+}
+
+
+/*
+    Centre d'applications ("Launchpad") : grille d'icones
+    centree sur un fond assombri qui couvre tout l'ecran --
+    meme principe visuel que le Launchpad macOS, tres different
+    du panneau-liste vertical d'origine (inspire du menu
+    Demarrer Windows 11/tiroir GNOME). Icone + libelle par
+    cellule, sans bordure de panneau individuelle (juste un
+    halo "verre depoli" discret derriere chaque icone).
+
+    Texte/icones toujours en BLANC ici, quel que soit le theme
+    clair/sombre courant (voir gui/theme.c) : contrairement au
+    reste de l'interface, le fond de cette grille est TOUJOURS
+    sombre (l'assombrissement ci-dessous), donc theme_text()
+    (quasi noir en theme clair) y serait illisible.
 */
 
 static void desktop_draw_app_center(desktop_state* state)
 {
 
 
-u32 rows = desktop_rows();
+u32 screen_w = gfx_width();
 
-int taskbar_y = (int)rows - 2;
-
-
-int panel_h = APP_CENTER_ENTRY_COUNT * APP_CENTER_ROW_H + 2;
-
-int panel_x = 1;
-
-int panel_y = taskbar_y - panel_h;
-
-if (panel_y < 1)
-{
-
-panel_y = 1;
-
-}
+u32 screen_h = gfx_height();
 
 
-u32 ppx = (u32)panel_x * 8 * GFX_SCALE;
-
-u32 ppy = (u32)panel_y * 8 * GFX_SCALE;
-
-u32 ppw = (u32)APP_CENTER_WIDTH * 8 * GFX_SCALE;
-
-u32 pph = (u32)panel_h * 8 * GFX_SCALE;
+gfx_color launchpad_text = 0xF2F2F7;
 
 
-gfx_fill_rect_blend(ppx + 3, ppy + 3, ppw, pph, theme_shadow(), 20);
+/* Assombrit tout l'ecran -- meme effet que l'ouverture du Launchpad sur macOS. */
 
-gfx_fill_rect_blend(ppx, ppy, ppw, pph, theme_panel(), 96);
-
-gfx_draw_rect(ppx, ppy, ppw, pph, theme_border());
+gfx_fill_rect_blend(0, 0, screen_w, screen_h, 0x000000, 45);
 
 
-state->app_center_panel.x = ppx;
-
-state->app_center_panel.y = ppy;
-
-state->app_center_panel.w = ppw;
-
-state->app_center_panel.h = pph;
+int rows_needed = (APP_CENTER_ENTRY_COUNT + LAUNCHPAD_COLS - 1) / LAUNCHPAD_COLS;
 
 
-u32 icon_size = 8 * GFX_SCALE;
+u32 grid_w = (u32)LAUNCHPAD_COLS * LAUNCHPAD_CELL_W;
+
+u32 grid_h = (u32)rows_needed * LAUNCHPAD_CELL_H;
+
+
+u32 grid_x = (screen_w > grid_w) ? (screen_w - grid_w) / 2 : 0;
+
+u32 grid_y = (screen_h > grid_h) ? (screen_h - grid_h) / 2 : 0;
+
+
+state->app_center_panel.x = grid_x;
+
+state->app_center_panel.y = grid_y;
+
+state->app_center_panel.w = grid_w;
+
+state->app_center_panel.h = grid_h;
 
 
 for (int i = 0; i < APP_CENTER_ENTRY_COUNT; i++)
 {
 
-u32 row_py = ppy + (u32)(1 + i * APP_CENTER_ROW_H) * 8 * GFX_SCALE;
 
-u32 row_h = (u32)APP_CENTER_ROW_H * 8 * GFX_SCALE;
+int col = i % LAUNCHPAD_COLS;
+
+int row = i / LAUNCHPAD_COLS;
 
 
-if (APP_CENTER_ENTRIES[i].action == DESKTOP_ACTION_TERMINAL)
-{
+u32 cell_x = grid_x + (u32)col * LAUNCHPAD_CELL_W;
 
-gfx_draw_hline(ppx + 4, row_py, ppw - 8, theme_border());
+u32 cell_y = grid_y + (u32)row * LAUNCHPAD_CELL_H;
+
+
+u32 halo_margin = 3 * GFX_SCALE;
+
+u32 halo_w = LAUNCHPAD_CELL_W - halo_margin * 2;
+
+u32 halo_h = LAUNCHPAD_ICON_SIZE + halo_margin * 2;
+
+
+gfx_fill_rounded_rect_blend(cell_x + halo_margin, cell_y + halo_margin, halo_w, halo_h, halo_margin * 2, 0xFFFFFF, 12);
+
+
+u32 icon_x = cell_x + (LAUNCHPAD_CELL_W - LAUNCHPAD_ICON_SIZE) / 2;
+
+u32 icon_y = cell_y + halo_margin * 2;
+
+
+icon_draw_for_action(APP_CENTER_ENTRIES[i].action, icon_x, icon_y, LAUNCHPAD_ICON_SIZE, launchpad_text);
+
+
+char label_buf[32];
+
+launchpad_truncate_label(APP_CENTER_ENTRIES[i].label, label_buf, sizeof(label_buf));
+
+
+u32 label_len = 0;
+
+while (label_buf[label_len] != 0) { label_len++; }
+
+u32 label_px_w = label_len * 8 * LAUNCHPAD_LABEL_SCALE;
+
+u32 label_x = (LAUNCHPAD_CELL_W > label_px_w) ? cell_x + (LAUNCHPAD_CELL_W - label_px_w) / 2 : cell_x;
+
+u32 label_y = icon_y + LAUNCHPAD_ICON_SIZE + 4 * GFX_SCALE;
+
+
+gfx_draw_text(label_x, label_y, label_buf, launchpad_text, LAUNCHPAD_LABEL_SCALE);
+
+
+state->app_center_entries[i].x = cell_x;
+
+state->app_center_entries[i].y = cell_y;
+
+state->app_center_entries[i].w = LAUNCHPAD_CELL_W;
+
+state->app_center_entries[i].h = LAUNCHPAD_CELL_H;
+
 
 }
 
-
-icon_draw_for_action(APP_CENTER_ENTRIES[i].action, ppx + 8, row_py + (row_h - icon_size) / 2, icon_size, theme_text());
-
-gfx_draw_text(ppx + 8 + icon_size + 8, row_py + (row_h - 8 * GFX_SCALE) / 2, APP_CENTER_ENTRIES[i].label, theme_text(), GFX_SCALE);
-
-
-state->app_center_entries[i].x = ppx;
-
-state->app_center_entries[i].y = row_py;
-
-state->app_center_entries[i].w = ppw;
-
-state->app_center_entries[i].h = row_h;
-
-}
 
 }
 
@@ -1143,6 +1402,38 @@ desktop_draw_taskbar(&state);
 }
 
 
+/*
+    Renvoie l'indice du raccourci epingle du Dock (DOCK_SHORTCUTS)
+    sous le point (mx,my), ou -1 si aucun -- utilise par
+    gui_desktop_run() pour distinguer un clic sur un raccourci
+    d'un clic sur l'icone du Centre d'applications ou sur une
+    fenetre ouverte (toutes des zones voisines dans le Dock).
+*/
+
+static int desktop_hit_dock_shortcut(desktop_state* state, s32 mx, s32 my)
+{
+
+for (int i = 0; i < DOCK_SHORTCUT_COUNT; i++)
+{
+
+if (gui_point_in_rect(
+state->dock_shortcuts[i].x, state->dock_shortcuts[i].y,
+state->dock_shortcuts[i].w, state->dock_shortcuts[i].h,
+mx, my
+))
+{
+
+return i;
+
+}
+
+}
+
+return -1;
+
+}
+
+
 void gui_desktop_run()
 {
 
@@ -1463,6 +1754,67 @@ state.app_center_open = 1;
 desktop_draw(&state);
 
 gui_cursor_reset();
+
+}
+
+else if (
+(
+desktop_hit_dock_shortcut(&state, mx, my) >= 0
+)
+)
+{
+
+
+int matched_shortcut = desktop_hit_dock_shortcut(&state, mx, my);
+
+
+/*
+    Meme logique que le Centre d'applications : redonne le
+    focus a une fenetre deja ouverte de ce type au lieu d'en
+    ouvrir une seconde.
+*/
+
+int existing = gui_window_find_by_entry(DOCK_SHORTCUTS[matched_shortcut].window_entry);
+
+if (existing >= 0)
+{
+
+gui_window_focus(existing);
+
+}
+else
+{
+
+
+/* Retrouve le libelle correspondant parmi APP_CENTER_ENTRIES, pour un titre de fenetre correct (voir gui/window.h, gui_window_slot.title). */
+
+const char* title = "Application";
+
+for (int i = 0; i < APP_CENTER_ENTRY_COUNT; i++)
+{
+
+if (APP_CENTER_ENTRIES[i].window_entry == DOCK_SHORTCUTS[matched_shortcut].window_entry)
+{
+
+title = APP_CENTER_ENTRIES[i].label;
+
+break;
+
+}
+
+}
+
+
+int opened = gui_window_open(title, DOCK_SHORTCUTS[matched_shortcut].window_entry);
+
+if (opened < 0)
+{
+
+sound_play_error();
+
+}
+
+}
 
 }
 

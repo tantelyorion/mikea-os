@@ -617,63 +617,25 @@ return raw << (8 - mask_size);
 }
 
 
-void gfx_fill_rect_blend(u32 x, u32 y, u32 w, u32 h, gfx_color tint, u32 alpha_percent)
+/*
+    Facteur commun a gfx_fill_rect_blend()/gfx_fill_rounded_rect_blend()
+    ci-dessous : le calcul par pixel (lire le fond, meler avec la
+    teinte demandee, reecrire) est identique dans les deux cas --
+    seule la FORME de la zone parcourue change (rectangle plein
+    contre rectangle a coins arrondis). Extrait ici pour ne pas
+    dupliquer cette arithmetique deux fois.
+*/
+
+static void gfx_blend_pixel_raw(u32 x, u32 y, u32 tint_r, u32 tint_g, u32 tint_b, u32 alpha_percent)
 {
 
-
-if (!gfx_ready)
-{
-
-return;
-
-}
-
-
-if (alpha_percent > 100)
-{
-
-alpha_percent = 100;
-
-}
-
-
-u32 tint_r = (tint >> 16) & 0xFF;
-
-u32 tint_g = (tint >> 8) & 0xFF;
-
-u32 tint_b = tint & 0xFF;
-
-
-u32 bytes_per_pixel = vbe_info->bpp / 8;
 
 u8* fb = (u8*)(u64)vbe_info->addr;
 
-
-for (u32 row = 0; row < h; row++)
-{
+u32 bytes_per_pixel = vbe_info->bpp / 8;
 
 
-if (y + row >= vbe_info->height)
-{
-
-break;
-
-}
-
-
-for (u32 col = 0; col < w; col++)
-{
-
-
-if (x + col >= vbe_info->width)
-{
-
-continue;
-
-}
-
-
-u8* pixel = fb + ((y + row) * vbe_info->pitch) + ((x + col) * bytes_per_pixel);
+u8* pixel = fb + (y * vbe_info->pitch) + (x * bytes_per_pixel);
 
 
 u32 existing = pixel[0] | (pixel[1] << 8) | (pixel[2] << 16);
@@ -711,6 +673,262 @@ if (vbe_info->bpp == 32)
 pixel[3] = 0;
 
 }
+
+
+}
+
+
+void gfx_fill_rect_blend(u32 x, u32 y, u32 w, u32 h, gfx_color tint, u32 alpha_percent)
+{
+
+
+if (!gfx_ready)
+{
+
+return;
+
+}
+
+
+if (alpha_percent > 100)
+{
+
+alpha_percent = 100;
+
+}
+
+
+u32 tint_r = (tint >> 16) & 0xFF;
+
+u32 tint_g = (tint >> 8) & 0xFF;
+
+u32 tint_b = tint & 0xFF;
+
+
+for (u32 row = 0; row < h; row++)
+{
+
+
+if (y + row >= vbe_info->height)
+{
+
+break;
+
+}
+
+
+for (u32 col = 0; col < w; col++)
+{
+
+
+if (x + col >= vbe_info->width)
+{
+
+continue;
+
+}
+
+
+gfx_blend_pixel_raw(x + col, y + row, tint_r, tint_g, tint_b, alpha_percent);
+
+
+}
+
+
+}
+
+
+}
+
+
+/*
+    Rectangle "verre depoli" a coins arrondis -- meme rendu que
+    gfx_fill_rect_blend() ci-dessus (identique au centre), mais
+    exclut de chaque coin un quart de disque de rayon "radius"
+    (test de distance au carre, pas de vraie trigonometrie :
+    inutile ici, et les fonctions flottantes n'existent pas dans
+    ce noyau freestanding). Signature "macOS" (Dock, barre de
+    menu superieure -- voir gui/desktop.c) : c'est ce qui
+    distingue le plus visuellement ce theme d'un simple decoupage
+    Windows/GNOME a angles droits.
+*/
+
+void gfx_fill_rounded_rect_blend(u32 x, u32 y, u32 w, u32 h, u32 radius, gfx_color tint, u32 alpha_percent)
+{
+
+
+if (!gfx_ready)
+{
+
+return;
+
+}
+
+
+if (alpha_percent > 100)
+{
+
+alpha_percent = 100;
+
+}
+
+
+/* Un rayon plus grand que la moitie la plus courte du rectangle n'aurait pas de sens (coins qui se chevauchent). */
+
+if (radius * 2 > w) { radius = w / 2; }
+
+if (radius * 2 > h) { radius = h / 2; }
+
+
+u32 tint_r = (tint >> 16) & 0xFF;
+
+u32 tint_g = (tint >> 8) & 0xFF;
+
+u32 tint_b = tint & 0xFF;
+
+
+for (u32 row = 0; row < h; row++)
+{
+
+
+if (y + row >= vbe_info->height)
+{
+
+break;
+
+}
+
+
+for (u32 col = 0; col < w; col++)
+{
+
+
+if (x + col >= vbe_info->width)
+{
+
+continue;
+
+}
+
+
+/*
+    Determine si (col,row) tombe dans l'un des quatre
+    coins EXCLUS (hors du quart de disque de ce coin) --
+    en dehors de ces quatre zones, tout le rectangle
+    reste plein comme d'habitude.
+*/
+
+int in_corner_zone =
+(col < radius && row < radius) ||
+(col >= w - radius && row < radius) ||
+(col < radius && row >= h - radius) ||
+(col >= w - radius && row >= h - radius);
+
+
+if (in_corner_zone)
+{
+
+
+u32 corner_cx = (col < radius) ? radius : w - radius;
+
+u32 corner_cy = (row < radius) ? radius : h - radius;
+
+
+s32 dx = (s32)col - (s32)corner_cx;
+
+s32 dy = (s32)row - (s32)corner_cy;
+
+
+u32 dist_sq = (u32)(dx * dx + dy * dy);
+
+
+if (dist_sq > radius * radius)
+{
+
+/* En dehors du quart de disque : pixel du coin, laisse tel quel (pas de fond dessine). */
+
+continue;
+
+}
+
+
+}
+
+
+gfx_blend_pixel_raw(x + col, y + row, tint_r, tint_g, tint_b, alpha_percent);
+
+
+}
+
+
+}
+
+
+}
+
+
+/*
+    Disque plein, opaque (PAS de transparence -- utilise pour de
+    petits elements d'accent tres visibles, comme les "feux
+    tricolores" macOS des barres de titre, voir gui/gui.c). Meme
+    test de distance au carre que gfx_fill_rounded_rect_blend()
+    ci-dessus, applique a tout le disque plutot qu'a des coins.
+*/
+
+void gfx_fill_circle(u32 cx, u32 cy, u32 radius, gfx_color color)
+{
+
+
+if (!gfx_ready)
+{
+
+return;
+
+}
+
+
+for (u32 row = 0; row <= radius * 2; row++)
+{
+
+
+s32 py = (s32)cy - (s32)radius + (s32)row;
+
+if (py < 0 || (u32)py >= vbe_info->height)
+{
+
+continue;
+
+}
+
+
+for (u32 col = 0; col <= radius * 2; col++)
+{
+
+
+s32 px = (s32)cx - (s32)radius + (s32)col;
+
+if (px < 0 || (u32)px >= vbe_info->width)
+{
+
+continue;
+
+}
+
+
+s32 dx = (s32)col - (s32)radius;
+
+s32 dy = (s32)row - (s32)radius;
+
+
+if ((u32)(dx * dx + dy * dy) > radius * radius)
+{
+
+continue;
+
+}
+
+
+gfx_put_pixel((u32)px, (u32)py, color);
 
 
 }

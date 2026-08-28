@@ -201,3 +201,53 @@ void mk_free(void* ptr)
     */
 
 }
+
+
+/*
+====================================================
+HEAP STATS (voir heap.h)
+====================================================
+*/
+
+
+void heap_stats(u32* used_out, u32* total_out)
+{
+
+if (total_out != (void*)0)
+{
+
+*total_out = HEAP_SIZE;
+
+}
+
+
+if (used_out == (void*)0)
+{
+
+return;
+
+}
+
+
+u32 used = 0;
+
+block_header* current = block_list;
+
+while (current != (void*)0)
+{
+
+if (!current->free)
+{
+
+used += current->size;
+
+}
+
+current = current->next;
+
+}
+
+
+*used_out = used;
+
+}

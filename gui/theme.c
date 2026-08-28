@@ -93,6 +93,25 @@ return dark_mode;
 #define CLOSE_BG           0xE0564F
 #define CLOSE_SYMBOL       0xFFFFFF
 
+/*
+    Feux tricolores macOS (voir theme.h) : jaune/vert
+    "authentiques" (mêmes teintes que le vrai macOS), assez
+    proches en luminosite de CLOSE_BG pour former un trio
+    coherent a l'oeil plutot que deux teintes disparates.
+*/
+
+#define MINIMIZE_BG        0xFEBC2E
+#define MAXIMIZE_BG        0x28C840
+
+/*
+    Accent bleu (voir theme.h) : bleu systeme macOS (identique
+    en clair/sombre, comme CLOSE_BG ci-dessus -- un seul point
+    d'accent, pas une variante par theme).
+*/
+
+#define ACCENT_BLUE        0x0A84FF
+#define ACCENT_BLUE_TEXT   0xFFFFFF
+
 
 gfx_color theme_desktop_bg()
 {
@@ -185,6 +204,38 @@ gfx_color theme_close_symbol()
 {
 
 return CLOSE_SYMBOL;
+
+}
+
+
+gfx_color theme_minimize_bg()
+{
+
+return MINIMIZE_BG;
+
+}
+
+
+gfx_color theme_maximize_bg()
+{
+
+return MAXIMIZE_BG;
+
+}
+
+
+gfx_color theme_accent()
+{
+
+return ACCENT_BLUE;
+
+}
+
+
+gfx_color theme_accent_text()
+{
+
+return ACCENT_BLUE_TEXT;
 
 }
 

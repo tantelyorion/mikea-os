@@ -144,6 +144,21 @@ void gfx_write_rect(u32 x, u32 y, u32 w, u32 h, const u8* buffer);
 void gfx_fill_rect_blend(u32 x, u32 y, u32 w, u32 h, gfx_color tint, u32 alpha_percent);
 
 
+/*
+    Variante a coins arrondis de gfx_fill_rect_blend() ci-dessus
+    (voir kernel/drivers/graphics/graphics.c pour le detail) --
+    "radius" est le rayon d'arrondi en pixels, ecrete
+    automatiquement si trop grand pour "w"/"h".
+*/
+
+void gfx_fill_rounded_rect_blend(u32 x, u32 y, u32 w, u32 h, u32 radius, gfx_color tint, u32 alpha_percent);
+
+
+/* Disque plein opaque (pas de transparence) -- petits accents visuels (feux tricolores macOS des barres de titre, voir gui/gui.c). */
+
+void gfx_fill_circle(u32 cx, u32 cy, u32 radius, gfx_color color);
+
+
 u32 gfx_bpp();
 
 
