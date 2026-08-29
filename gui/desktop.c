@@ -615,6 +615,18 @@ gfx_draw_text(clock_x, text_y, clock_text, theme_titlebar_text(), GFX_SCALE);
 #define DOCK_BOTTOM_MARGIN (8 * GFX_SCALE)
 
 
+u32 desktop_dock_top_px()
+{
+
+u32 screen_h = gfx_height();
+
+u32 dock_h = DOCK_PADDING * 2 + DOCK_ICON_SIZE;
+
+return screen_h - dock_h - DOCK_BOTTOM_MARGIN;
+
+}
+
+
 static void desktop_draw_taskbar(desktop_state* state)
 {
 

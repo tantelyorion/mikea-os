@@ -313,11 +313,15 @@ was_pressed = now_pressed;
 if (clicked)
 {
 
-u32 rows_now = gfx_height() / (8 * GFX_SCALE);
+/*
+    Correctif (Dock macOS, voir gui/desktop.h) : la limite
+    utilisee ici venait auparavant d'un calcul local suppose
+    ("les 2 dernieres lignes de texte"), perime depuis le
+    passage a un Dock flottant de hauteur fixe -- voir
+    desktop_dock_top_px().
+*/
 
-u32 taskbar_top_px = (rows_now - 2) * 8 * GFX_SCALE;
-
-if ((u32)my >= taskbar_top_px)
+if ((u32)my >= desktop_dock_top_px())
 {
 
 gui_cursor_erase();

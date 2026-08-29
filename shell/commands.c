@@ -1136,7 +1136,9 @@ return;
 console_write("Installation en cours (2048 secteurs, 1 Mo)...\n");
 
 
-install_result result = installer_run((void*)0);
+u32 failed_sector = 0;
+
+install_result result = installer_run((void*)0, &failed_sector);
 
 
 if (result == INSTALL_OK)
@@ -1152,7 +1154,29 @@ console_write("'-drive' (le disque installe doit passer en premier).\n");
 else
 {
 
-console_write("Installation echouee -- voir le message d'erreur ci-dessus.\n");
+console_write("Installation echouee au secteur ");
+
+char sector_str[12];
+
+int i = 0;
+
+u32 v = failed_sector;
+
+if (v == 0) { sector_str[i++] = '0'; }
+
+char tmp[12];
+
+int t = 0;
+
+while (v > 0) { tmp[t++] = (char)('0' + (v % 10)); v /= 10; }
+
+while (t > 0) { t--; sector_str[i++] = tmp[t]; }
+
+sector_str[i] = 0;
+
+console_write(sector_str);
+
+console_write(" -- voir le message d'erreur ci-dessus.\n");
 
 }
 

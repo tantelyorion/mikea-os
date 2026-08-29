@@ -124,10 +124,28 @@ return -1;
 static int ata_wait_data()
 {
 
+/*
+    Correctif (conformite ATA/IDE -- voir le wiki OSDev, "ATA
+    PIO Mode") : attendre que BSY retombe a 0 avant de tester
+    ERR/DRQ. En pratique, la plupart des controleurs (dont
+    celui de QEMU) ne mettent jamais DRQ ou ERR a 1 tant que
+    BSY vaut encore 1, donc l'ancien code (qui ne testait que
+    ERR/DRQ) fonctionnait deja correctement ici -- mais rien ne
+    garantit ce comportement sur tout materiel/emulateur, et la
+    specification est explicite sur l'ordre a respecter.
+*/
+
 for (u32 tries = 0; tries < ATA_TIMEOUT_ITERATIONS; tries++)
 {
 
 u8 status = inb(ATA_STATUS);
+
+if (status & ATA_STATUS_BSY)
+{
+
+continue;
+
+}
 
 if (status & ATA_STATUS_ERR)
 {
@@ -306,7 +324,7 @@ return 0;
 }
 
 
-install_result installer_run(void (*progress_callback)(u32 sector, u32 total))
+install_result installer_run(void (*progress_callback)(u32 sector, u32 total), u32* failed_sector_out)
 {
 
 
@@ -328,6 +346,8 @@ write_u32(sector);
 
 console_write("\n");
 
+if (failed_sector_out != (void*)0) { *failed_sector_out = sector; }
+
 return INSTALL_ERROR_READ;
 
 }
@@ -341,6 +361,8 @@ console_write("[install] Erreur d'ecriture (disque esclave), secteur ");
 write_u32(sector);
 
 console_write("\n");
+
+if (failed_sector_out != (void*)0) { *failed_sector_out = sector; }
 
 return INSTALL_ERROR_WRITE;
 
@@ -365,6 +387,8 @@ write_u32(sector);
 
 console_write("\n");
 
+if (failed_sector_out != (void*)0) { *failed_sector_out = sector; }
+
 return INSTALL_ERROR_VERIFY;
 
 }
@@ -385,6 +409,8 @@ console_write(", octet ");
 write_u32(i);
 
 console_write("\n");
+
+if (failed_sector_out != (void*)0) { *failed_sector_out = sector; }
 
 return INSTALL_ERROR_VERIFY;
 

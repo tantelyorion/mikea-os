@@ -48,10 +48,21 @@ INSTALL_ERROR_VERIFY = 3
     apres chaque secteur copie avec le numero de secteur en
     cours (0 a INSTALLER_SECTOR_COUNT-1), pour permettre
     d'afficher une progression -- peut etre nul si l'appelant
-    ne veut pas de retour de progression.
+    ne veut pas de retour de progression. "failed_sector_out"
+    (optionnel, peut etre nul) recoit le numero du secteur en
+    cause en cas d'echec (INSTALL_OK laisse sa valeur
+    inchangee) -- correctif (diagnostic d'echec invisible en
+    mode graphique) : jusqu'ici, ce detail n'etait ecrit que
+    via console_write(), qui dessine sur le curseur console
+    GLOBAL (voir kernel/console/console.c), a un endroit de
+    l'ecran sans rapport avec la fenetre de l'installateur --
+    invisible ou immediatement recouvert par le bureau/la
+    fenetre elle-meme. Le transmettre ainsi permet a l'appelant
+    (apps/installer_app/installer_app.c) de l'afficher
+    directement DANS sa propre fenetre.
 */
 
-install_result installer_run(void (*progress_callback)(u32 sector, u32 total));
+install_result installer_run(void (*progress_callback)(u32 sector, u32 total), u32* failed_sector_out);
 
 
 #endif

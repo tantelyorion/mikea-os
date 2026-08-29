@@ -109,7 +109,7 @@ gfx_draw_text(g_bar_px + g_bar_pw + 8, g_bar_py, percent_text, theme_text(), GFX
 }
 
 
-static void installer_draw(int win_x, int win_y, int win_w, int win_h, int mode, install_result result,
+static void installer_draw(int win_x, int win_y, int win_w, int win_h, int mode, install_result result, u32 failed_sector,
 u32* close_bx, u32* close_by, u32* close_bsize,
 u32* action_x, u32* action_y, u32* action_w, u32* action_h,
 u32* cancel_x, u32* cancel_y, u32* cancel_w, u32* cancel_h)
@@ -127,7 +127,7 @@ gui_draw_text(win_x + 1, win_y + 2, "Reserve a root.", theme_text_attr());
 
 gui_draw_text(win_x + 1, win_y + 3, "Connectez-vous en administrateur", theme_text_attr());
 
-gui_draw_text(win_x + 1, win_y + 4, "pour installer MikeaOS sur le disque.", theme_text_attr());
+gui_draw_text(win_x + 1, win_y + 4, "pour installer MikeaOS.", theme_text_attr());
 
 gui_draw_button(win_x + 1, win_y + win_h - 4, win_w - 2, 2, "Fermer", action_x, action_y, action_w, action_h);
 
@@ -136,13 +136,15 @@ gui_draw_button(win_x + 1, win_y + win_h - 4, win_w - 2, 2, "Fermer", action_x, 
 else if (mode == INST_MODE_CONFIRM)
 {
 
-gui_draw_text(win_x + 1, win_y + 2, "ATTENTION : ceci va EFFACER le disque", theme_text_attr());
+gui_draw_text(win_x + 1, win_y + 2, "ATTENTION : ceci va EFFACER le", theme_text_attr());
 
-gui_draw_text(win_x + 1, win_y + 3, "de donnees actuel et le remplacer par", theme_text_attr());
+gui_draw_text(win_x + 1, win_y + 3, "disque de donnees actuel et le", theme_text_attr());
 
-gui_draw_text(win_x + 1, win_y + 4, "une copie demarrable de MikeaOS.", theme_text_attr());
+gui_draw_text(win_x + 1, win_y + 4, "remplacer par une copie demarrable", theme_text_attr());
 
-gui_draw_text(win_x + 1, win_y + 6, "Cette action est irreversible.", theme_text_attr());
+gui_draw_text(win_x + 1, win_y + 5, "de MikeaOS.", theme_text_attr());
+
+gui_draw_text(win_x + 1, win_y + 7, "Cette action est irreversible.", theme_text_attr());
 
 
 gui_draw_button(win_x + 1, win_y + win_h - 4, (win_w - 3) / 2, 2, "Installer", action_x, action_y, action_w, action_h);
@@ -154,7 +156,7 @@ gui_draw_button(win_x + 2 + (win_w - 3) / 2, win_y + win_h - 4, (win_w - 3) / 2,
 else if (mode == INST_MODE_RUNNING)
 {
 
-gui_draw_text(win_x + 1, win_y + 2, "Installation en cours, veuillez patienter...", theme_text_attr());
+gui_draw_text(win_x + 1, win_y + 2, "Installation en cours...", theme_text_attr());
 
 
 g_bar_px = (u32)(win_x + 1) * 8 * GFX_SCALE;
@@ -180,11 +182,11 @@ switch (result)
 
 case INSTALL_OK: msg = "Installation reussie."; break;
 
-case INSTALL_ERROR_READ: msg = "Echec : erreur de lecture du disque source."; break;
+case INSTALL_ERROR_READ: msg = "Echec : erreur de lecture (disque source)."; break;
 
-case INSTALL_ERROR_WRITE: msg = "Echec : erreur d'ecriture sur le disque cible."; break;
+case INSTALL_ERROR_WRITE: msg = "Echec : erreur d'ecriture (disque cible)."; break;
 
-default: msg = "Echec : la verification a trouve des donnees differentes."; break;
+default: msg = "Echec : verification (donnees differentes)."; break;
 
 }
 
@@ -195,9 +197,54 @@ gui_draw_text(win_x + 1, win_y + 2, msg, theme_text_attr());
 if (result == INSTALL_OK)
 {
 
-gui_draw_text(win_x + 1, win_y + 4, "Inversez l'ordre des deux disques dans", theme_text_attr());
+gui_draw_text(win_x + 1, win_y + 4, "Inversez l'ordre des deux disques", theme_text_attr());
 
-gui_draw_text(win_x + 1, win_y + 5, "QEMU pour demarrer sur la copie installee.", theme_text_attr());
+gui_draw_text(win_x + 1, win_y + 5, "dans QEMU pour demarrer sur la", theme_text_attr());
+
+gui_draw_text(win_x + 1, win_y + 6, "copie installee.", theme_text_attr());
+
+}
+else
+{
+
+/*
+    Correctif (diagnostic d'echec invisible en mode
+    graphique -- voir boot/installer/installer.h,
+    "failed_sector_out") : indique EXACTEMENT quel secteur
+    a pose probleme, directement dans la fenetre --
+    jusqu'ici, seul un console_write() invisible en mode
+    graphique donnait ce detail.
+*/
+
+char sector_line[40];
+
+const char* prefix = "Secteur concerne : ";
+
+int i = 0;
+
+while (prefix[i] && i < 39) { sector_line[i] = prefix[i]; i++; }
+
+
+u32 v = failed_sector;
+
+char tmp[12];
+
+int t = 0;
+
+if (v == 0) { tmp[t++] = '0'; }
+
+while (v > 0) { tmp[t++] = (char)('0' + (v % 10)); v /= 10; }
+
+while (t > 0 && i < 39) { t--; sector_line[i++] = tmp[t]; }
+
+sector_line[i] = 0;
+
+
+gui_draw_text(win_x + 1, win_y + 4, sector_line, theme_text_attr());
+
+gui_draw_text(win_x + 1, win_y + 6, "Reessayez ; si l'echec persiste,", theme_text_attr());
+
+gui_draw_text(win_x + 1, win_y + 7, "le disque cible pose probleme.", theme_text_attr());
 
 }
 
@@ -233,7 +280,7 @@ return;
 }
 
 
-int win_x = 4, win_y = 4, win_w = 40, win_h = 12;
+int win_x = 1, win_y = 4, win_w = 38, win_h = 14;
 
 
 user* current = user_get_current();
@@ -241,6 +288,8 @@ user* current = user_get_current();
 int mode = (current != (void*)0 && current->id == 1) ? INST_MODE_CONFIRM : INST_MODE_DENIED;
 
 install_result result = INSTALL_OK;
+
+u32 failed_sector = 0;
 
 
 u32 close_bx = 0, close_by = 0, close_bsize = 0;
@@ -281,7 +330,7 @@ continue;
 if (redraw)
 {
 
-installer_draw(win_x, win_y, win_w, win_h, mode, result, &close_bx, &close_by, &close_bsize, &action_x, &action_y, &action_w, &action_h, &cancel_x, &cancel_y, &cancel_w, &cancel_h);
+installer_draw(win_x, win_y, win_w, win_h, mode, result, failed_sector, &close_bx, &close_by, &close_bsize, &action_x, &action_y, &action_w, &action_h, &cancel_x, &cancel_y, &cancel_w, &cancel_h);
 
 was_pressed = mouse_left_pressed();
 
@@ -307,11 +356,15 @@ was_pressed = now_pressed;
 if (mode != INST_MODE_RUNNING && clicked)
 {
 
-u32 rows_now = gfx_height() / (8 * GFX_SCALE);
+/*
+    Correctif (Dock macOS, voir gui/desktop.h) : la limite
+    utilisee ici venait auparavant d'un calcul local suppose
+    ("les 2 dernieres lignes de texte"), perime depuis le
+    passage a un Dock flottant de hauteur fixe -- voir
+    desktop_dock_top_px().
+*/
 
-u32 taskbar_top_px = (rows_now - 2) * 8 * GFX_SCALE;
-
-if ((u32)my >= taskbar_top_px)
+if ((u32)my >= desktop_dock_top_px())
 {
 
 gui_cursor_erase();
@@ -396,7 +449,7 @@ if (mode == INST_MODE_RUNNING)
     copies. Voir boot/installer/installer.h.
 */
 
-result = installer_run(installer_progress_cb);
+result = installer_run(installer_progress_cb, &failed_sector);
 
 mode = INST_MODE_DONE;
 

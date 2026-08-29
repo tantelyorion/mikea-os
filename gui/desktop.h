@@ -60,6 +60,34 @@ void desktop_render_backdrop();
 
 
 /*
+    Coordonnee Y (en pixels) du bord SUPERIEUR du Dock (voir
+    gui/desktop.c, desktop_draw_taskbar()) -- utilisee par
+    chaque application pour savoir si un clic doit lui etre
+    transmis normalement ou etre cede au bureau (voir
+    gui_window_yield_click(), gui/window.c), quand ce clic
+    tombe dans la zone du Dock plutot que dans le contenu de
+    la fenetre elle-meme.
+
+    Correctif (bureau macOS) : chaque application calculait
+    auparavant elle-meme cette limite ("rows_now - 2" lignes de
+    texte), en supposant l'ANCIENNE barre des taches (pleine
+    largeur, ancree tout en bas, exactement 2 lignes de haut).
+    Le nouveau Dock etant un element flottant de hauteur FIXE
+    independante du nombre de fenetres ouvertes (voir
+    DOCK_PADDING/DOCK_ICON_SIZE/DOCK_BOTTOM_MARGIN, gui/desktop.c),
+    sa position ne varie qu'avec la hauteur d'ecran -- centraliser
+    ce calcul ICI garantit que les sept applications qui en
+    dependent (calculatrice, gestionnaire de fichiers,
+    installateur, session/compte, parametres, terminal, corbeille)
+    restent TOUJOURS coherentes avec le Dock reellement dessine,
+    au lieu de chacune recalculer (et desormais mal recalculer)
+    la meme chose separement.
+*/
+
+u32 desktop_dock_top_px();
+
+
+/*
     Dessine un motif de fond d'ecran (voir gui/theme.h,
     wallpaper_style) dans le rectangle pixel ("x","y","w","h")
     donne -- pas forcement plein ecran : utilisee par
