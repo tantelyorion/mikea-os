@@ -105,7 +105,18 @@ Version MKFS
 
 */
 
-main_superblock.version = 2;
+/*
+    Correctif (fichiers multi-blocs, voir inode.h et
+    fs_layout.h) : version passee de 2 a 3 -- la disposition
+    disque a change (inode agrandi de 92 a 96 octets, table des
+    inodes/bitmap decales d'un bloc). Un ancien disque deja
+    forme en version 2 doit etre reforme, pas relu tel quel
+    (voir filesystem/mkfs.c, fs_already_formatted()) : le
+    charger avec la nouvelle disposition lirait les mauvais
+    octets aux mauvais endroits.
+*/
+
+main_superblock.version = 3;
 
 
 

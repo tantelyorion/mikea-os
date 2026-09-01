@@ -25,12 +25,11 @@
     du point de vue de l'utilisateur, tout etait perdu au
     redemarrage, comme documente dans le README.
 
-    Ce fichier definit les quelques blocs de DONNEES (voir
-    block.h, BLOCK_SIZE=512) reserves aux metadonnees du
-    systeme de fichiers lui-meme plutot qu'a des donnees de
-    fichiers, afin de pouvoir les relire au demarrage suivant
-    (voir mkfs.c, inode_table_save()/load() dans inode.c,
-    block_table_save()/load() dans block.c) :
+    Correctif (fichiers multi-blocs, voir inode.h,
+    "indirect_block") : l'ajout de ce champ a fait passer
+    sizeof(inode) de 92 a 96 octets -- 128 inodes * 96 = 12288
+    octets = EXACTEMENT 24 blocs desormais (au lieu de 23),
+    d'ou le decalage d'un bloc de tout ce qui suit.
 
         Bloc 0            : superbloc (deja reserve avant ce
                             correctif -- voir superblock.c,
@@ -38,16 +37,16 @@
                             block_allocate() ci-dessous qui
                             commence deja a 1, jamais 0)
 
-        Blocs 1-23        : table des inodes (128 inodes *
-                            92 octets = 11776 octets = tient
-                            EXACTEMENT dans 23 blocs de 512
+        Blocs 1-24        : table des inodes (128 inodes *
+                            96 octets = 12288 octets = tient
+                            EXACTEMENT dans 24 blocs de 512
                             octets, sans octet perdu)
 
-        Blocs 24-27       : bitmap des blocs (2048 octets =
+        Blocs 25-28       : bitmap des blocs (2048 octets =
                             TOTAL_BLOCKS, tient EXACTEMENT
                             dans 4 blocs)
 
-    A partir du bloc 28 (FS_FIRST_DATA_BLOCK) : donnees de
+    A partir du bloc 29 (FS_FIRST_DATA_BLOCK) : donnees de
     fichiers normales, ce que block_allocate() (block.c) peut
     desormais seul distribuer.
 
@@ -65,15 +64,15 @@
 
 #define FS_INODE_TABLE_START_BLOCK 1
 
-#define FS_INODE_TABLE_BLOCKS 23
+#define FS_INODE_TABLE_BLOCKS 24
 
 
-#define FS_BLOCK_BITMAP_START_BLOCK 24
+#define FS_BLOCK_BITMAP_START_BLOCK 25
 
 #define FS_BLOCK_BITMAP_BLOCKS 4
 
 
-#define FS_FIRST_DATA_BLOCK 28
+#define FS_FIRST_DATA_BLOCK 29
 
 
 #endif

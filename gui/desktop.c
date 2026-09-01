@@ -62,6 +62,10 @@ void cmd_trash_app();
 
 void cmd_terminal_app();
 
+void cmd_archad_app();
+
+void cmd_valiha_app();
+
 void cmd_installer_app();
 
 
@@ -296,6 +300,10 @@ DESKTOP_ACTION_TRASH,
 
 DESKTOP_ACTION_TERMINAL,
 
+DESKTOP_ACTION_ARCHAD,
+
+DESKTOP_ACTION_VALIHA,
+
 DESKTOP_ACTION_LOGOUT,
 
 DESKTOP_ACTION_REBOOT,
@@ -307,7 +315,7 @@ DESKTOP_ACTION_INSTALL
 } desktop_action;
 
 
-#define APP_CENTER_ENTRY_COUNT 10
+#define APP_CENTER_ENTRY_COUNT 12
 
 
 typedef struct
@@ -331,6 +339,8 @@ static const app_center_entry APP_CENTER_ENTRIES[APP_CENTER_ENTRY_COUNT] = {
 { "Compte", DESKTOP_ACTION_ACCOUNT, cmd_gui },
 { "Corbeille", DESKTOP_ACTION_TRASH, cmd_trash_app },
 { "Terminal", DESKTOP_ACTION_TERMINAL, cmd_terminal_app },
+{ "Archad", DESKTOP_ACTION_ARCHAD, cmd_archad_app },
+{ "Valiha", DESKTOP_ACTION_VALIHA, cmd_valiha_app },
 { "Installer sur le disque", DESKTOP_ACTION_INSTALL, cmd_installer_app },
 { "Deconnexion", DESKTOP_ACTION_LOGOUT, (void*)0 },
 { "Redemarrer", DESKTOP_ACTION_REBOOT, (void*)0 },
@@ -383,6 +393,10 @@ case DESKTOP_ACTION_ACCOUNT: icon_draw_user(px, py, size, color); break;
 case DESKTOP_ACTION_TRASH: icon_draw_trash(px, py, size, color); break;
 
 case DESKTOP_ACTION_TERMINAL: icon_draw_terminal(px, py, size, color); break;
+
+case DESKTOP_ACTION_ARCHAD: icon_draw_archive(px, py, size, color); break;
+
+case DESKTOP_ACTION_VALIHA: icon_draw_music(px, py, size, color); break;
 
 case DESKTOP_ACTION_LOGOUT: icon_draw_power(px, py, size, color); break;
 

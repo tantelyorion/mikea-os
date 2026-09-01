@@ -387,3 +387,60 @@ u32 dot_y = line_y + 2;
 gfx_fill_rect(dot_x, dot_y, dot_size, dot_size, color);
 
 }
+
+
+void icon_draw_archive(u32 px, u32 py, u32 size, gfx_color color)
+{
+
+gfx_draw_rect(px, py, size, size, color);
+
+
+/* Bandeau superieur (couvercle de caisse). */
+
+u32 lid_h = size / 4;
+
+if (lid_h < 2) { lid_h = 2; }
+
+gfx_draw_hline(px + 1, py + lid_h, size - 2, color);
+
+
+/* Fermoir central : petit rectangle vertical qui chevauche le bandeau. */
+
+u32 clasp_w = size / 4;
+
+if (clasp_w < 2) { clasp_w = 2; }
+
+u32 clasp_x = px + (size - clasp_w) / 2;
+
+gfx_fill_rect(clasp_x, py + lid_h - 1, clasp_w, size / 3, color);
+
+}
+
+
+void icon_draw_music(u32 px, u32 py, u32 size, gfx_color color)
+{
+
+u32 head_size = size / 3;
+
+if (head_size < 3) { head_size = 3; }
+
+
+/* Tete de note (pleine), en bas a gauche de la zone. */
+
+gfx_fill_rect(px, py + size - head_size, head_size, head_size, color);
+
+
+/* Hampe verticale, montant depuis le bord droit de la tete. */
+
+u32 stem_x = px + head_size - 1;
+
+gfx_draw_vline(stem_x, py, size - head_size / 2, color);
+
+
+/* Petit drapeau en haut de la hampe. */
+
+gfx_draw_hline(stem_x, py, head_size, color);
+
+gfx_draw_hline(stem_x, py + 2, head_size - 1, color);
+
+}

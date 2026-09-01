@@ -86,6 +86,25 @@ First data block
 u32 block;
 
 
+/*
+    Correctif (fichiers multi-blocs, voir fs_layout.h et
+    file.c, file_write_bin()/file_read_bin()) : "block"
+    ci-dessus reste utilise seul pour les petits fichiers (au
+    plus 512 octets, un seul bloc -- chemin inchange, voir
+    file_write()/file_read()). Au-dela, ce champ pointe vers un
+    "bloc indirect" : un bloc de donnees ordinaire qui, au lieu
+    de contenir les donnees du fichier, contient une simple
+    liste de u32 -- les numeros des blocs qui, mis bout a bout,
+    contiennent les donnees reelles. 512 octets / 4 octets par
+    entree = 128 blocs de donnees adressables, soit 65536
+    octets (64 Ko) de taille de fichier maximale -- au-dela,
+    file_write_bin() echoue proprement (voir son commentaire).
+    0 = fichier a un seul bloc (comme avant ce correctif).
+*/
+
+u32 indirect_block;
+
+
 
 /*
 File status

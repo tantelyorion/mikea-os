@@ -231,6 +231,11 @@ node->block =
 new_block;
 
 
+/* Correctif (fichiers multi-blocs) : toujours reinitialiser -- un inode reutilise peut porter la valeur laissee par son ancien occupant. */
+
+node->indirect_block = 0;
+
+
 node->permission =
 7;
 
@@ -491,6 +496,46 @@ node->block
 );
 
 
+/*
+    Correctif (fichiers multi-blocs, voir inode.h) : libere
+    aussi le bloc indirect et TOUS les blocs de donnees qu'il
+    reference -- sans quoi la suppression d'un fichier de plus
+    de 512 octets ne liberait que son premier bloc, le reste
+    restant marque "utilise" pour toujours (fuite d'espace
+    disque permanente).
+*/
+
+if (node->indirect_block != 0)
+{
+
+u8 indirect_buffer[BLOCK_SIZE];
+
+block_read(node->indirect_block, indirect_buffer);
+
+
+u32* block_list = (u32*)indirect_buffer;
+
+u32 max_entries = BLOCK_SIZE / sizeof(u32);
+
+
+for (u32 i = 0; i < max_entries; i++)
+{
+
+if (block_list[i] != 0)
+{
+
+block_free(block_list[i]);
+
+}
+
+}
+
+
+block_free(node->indirect_block);
+
+}
+
+
 
 
 node->used=0;
@@ -503,6 +548,9 @@ node->size=0;
 
 
 node->block=0;
+
+
+node->indirect_block=0;
 
 
 node->deleted=0;

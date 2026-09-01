@@ -406,6 +406,27 @@ if (mode == INST_MODE_CONFIRM)
 
 mode = INST_MODE_RUNNING;
 
+
+/*
+    Correctif (perception de "plantage" au clic sur
+    "Installer") : sans cet appel explicite ici,
+    l'ecran restait fige sur l'ecran de confirmation
+    pendant TOUTE la duree de l'installation (1 a 2
+    minutes, voir les delais de securite ATA -- boot/
+    installer/installer.c, ata_delay_ticks()) avant
+    d'afficher quoi que ce soit -- "redraw = 1" plus
+    bas ne suffit pas : le prochain passage par "if
+    (redraw)" (haut de la boucle) n'a jamais lieu avant
+    la fin de installer_run() ci-dessous, puisque cet
+    appel est BLOQUANT et se produit sur cette MEME
+    iteration, juste apres. Sans retour visuel pendant
+    1 a 2 minutes, l'ecran fige donnait exactement
+    l'impression d'un systeme plante.
+*/
+
+installer_draw(win_x, win_y, win_w, win_h, mode, result, failed_sector, &close_bx, &close_by, &close_bsize, &action_x, &action_y, &action_w, &action_h, &cancel_x, &cancel_y, &cancel_w, &cancel_h);
+
+
 redraw = 1;
 
 }

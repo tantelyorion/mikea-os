@@ -98,4 +98,14 @@ void icon_draw_trash(u32 px, u32 py, u32 size, gfx_color color);
 void icon_draw_disk(u32 px, u32 py, u32 size, gfx_color color);
 
 
+/* Archive (icone Archad) : caisse + fermoir central, evoque un contenu regroupe/compresse. */
+
+void icon_draw_archive(u32 px, u32 py, u32 size, gfx_color color);
+
+
+/* Note de musique (icone Valiha) : tete pleine + hampe, silhouette simple reconnaissable meme en tres petit. */
+
+void icon_draw_music(u32 px, u32 py, u32 size, gfx_color color);
+
+
 #endif

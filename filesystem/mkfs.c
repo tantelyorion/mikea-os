@@ -40,7 +40,7 @@ sb->magic[1]=='I' &&
 sb->magic[2]=='K' &&
 sb->magic[3]=='E' &&
 sb->magic[4]=='A' &&
-sb->version==2
+sb->version==3
 );
 
 }
