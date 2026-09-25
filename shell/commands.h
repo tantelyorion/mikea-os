@@ -6,5 +6,6 @@ void execute_command(
     char* command
 );
 
+void cmd_lspci(int argc, char **argv);
 
 #endif
