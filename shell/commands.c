@@ -1,5 +1,7 @@
 #include "commands.h"
 
+#include "../kernel/drivers/pci/pci.h"
+
 #include "../kernel/drivers/power/power.h"
 
 #include "../kernel/drivers/speaker/speaker.h"
@@ -72,7 +74,12 @@ char* buffer,
 unsigned int max_len
 );
 
-
+void cmd_lspci(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    pci_list_devices();
+}
 
 /*
     Correctif majeur (historique) : execute_command() ne
@@ -1516,6 +1523,7 @@ console_write("settings\n");
 console_write("run <name>\n");
 console_write("reboot\n");
 console_write("shutdown\n");
+console_write("lspci\n");
 
 
 }
@@ -1843,6 +1851,11 @@ else if(mk_strcmp(command, "shutdown") == 0)
 
 power_shutdown();
 
+}
+
+else if(mk_strcmp(command, "lspci") == 0)
+{
+    pci_list_devices();
 }
 
 

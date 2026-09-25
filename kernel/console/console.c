@@ -516,3 +516,30 @@ cursor_x = 0;
 cursor_y = 0;
 
 }
+void console_write_dec(u32 val) {
+    if (val == 0) {
+        console_write("0");
+        return;
+    }
+    char buf[12];
+    int i = 10;
+    buf[11] = '\0';
+    while (val > 0 && i >= 0) {
+        buf[i--] = '0' + (val % 10);
+        val /= 10;
+    }
+    console_write(&buf[i + 1]);
+}
+
+void console_write_hex(u16 val) {
+    const char hex_chars[] = "0123456789ABCDEF";
+    char buf[7];
+    buf[0] = '0';
+    buf[1] = 'x';
+    buf[2] = hex_chars[(val >> 12) & 0x0F];
+    buf[3] = hex_chars[(val >> 8) & 0x0F];
+    buf[4] = hex_chars[(val >> 4) & 0x0F];
+    buf[5] = hex_chars[val & 0x0F];
+    buf[6] = '\0';
+    console_write(buf);
+}

@@ -68,5 +68,17 @@ outb(0x80, 0);
 
 }
 
+static inline void outl(u16 port, u32 value)
+{
+    asm volatile("out %0, %1" : : "a"(value), "Nd"(port));
+}
+
+static inline u32 inl(u16 port)
+{
+    u32 value;
+    asm volatile("inl %1, %0" : "=a"(value) : "Nd"(port));
+    return value;
+}
+
 
 #endif

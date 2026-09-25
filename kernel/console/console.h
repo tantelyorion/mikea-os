@@ -7,6 +7,9 @@
 
 void console_init();
 
+void console_write_dec(u32 val);
+void console_write_hex(u16 val);
+
 void console_write(
 const char* text
 );

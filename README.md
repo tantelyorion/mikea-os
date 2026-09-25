@@ -61,7 +61,7 @@ projet, du tout premier octet exécuté par le BIOS jusqu'au shell.
 | **Isolation mémoire / Ring 3** | Aucune. Tout (shell, commandes, programmes `.mkx`) s'exécute au niveau privilège noyau. |
 | **Sécurité des mots de passe** | Hash FNV-1a (rapide, non cryptographique) — pas de SHA-256/bcrypt. |
 | **Gestionnaire de paquets** | `mpm install` ne fait qu'enregistrer un nom/version en mémoire, aucune extraction/installation binaire réelle. |
-| **Détection matérielle** | `cpu_init()`/`pci_init()` sont des stubs (pas de CPUID, pas de scan PCI) ; pilotes à ports I/O fixes. |
+| ✅**Détection matérielle** | `cpu_init()`/`pci_init()` sont des stubs (pas de CPUID, pas de scan PCI) ; pilotes à ports I/O fixes. |
 | **SDK applicatif** | `apps/hello/hello.c` existe en exemple mais n'est pas compilé par le Makefile. |
 
 ## Architecture
@@ -283,7 +283,7 @@ help        about       version     clear       cpu         mem
 whoami      useradd     userdel     passwd      users       logout
 ps          mpm         mkdir       touch       write       cat
 rm          ls          gui         gfxstatus   mouse       install
-calc        run
+calc        run         lspci
 ```
 
 Tapez `help` dans le shell pour la liste à jour avec une courte
@@ -408,7 +408,7 @@ entière) :
    place de FNV-1a.
 3. **Gestionnaire de paquets fonctionnel** — format `.mpk` réel,
    extraction, vérification de signature.
-4. **Détection matérielle dynamique** (CPUID, scan PCI) à la place des
+4. ✅**Détection matérielle dynamique** (CPUID, scan PCI) à la place des
    pilotes à ports fixes.
 5. **Un vrai pilote graphique** (VESA/VBE ou GOP) — les assets
    (`assets/icons`, `assets/wallpapers`, `assets/fonts`) sont déjà en
