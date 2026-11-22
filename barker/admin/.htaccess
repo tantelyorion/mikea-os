@@ -1,9 +1,0 @@
-# Protect admin panel — require authentication
-# In production, restrict by IP or add HTTP Basic Auth:
-# AuthType Basic
-# AuthName "BARKER Admin"
-# AuthUserFile /etc/apache2/.htpasswd
-# Require valid-user
-
-# For now, access is controlled by PHP session check (is_verified = admin)
-Options -Indexes
