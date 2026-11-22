@@ -328,6 +328,18 @@ return 0;
 }
 
 
+/*
+    Lecture d'un secteur du disque de DEMARRAGE (maitre) pour le reste
+    du noyau (voir kernel/assets/assets.c : fonds d'ecran et sons lus
+    a la demande au lieu d'etre compiles dans le noyau).
+*/
+
+int installer_read_boot_sector(u32 lba, u8* buffer)
+{
+    return ata_read_sector(lba, buffer, ATA_MASTER_SELECT);
+}
+
+
 static int ata_write_sector(u32 lba, const u8* buffer, u8 drive_select)
 {
 

@@ -108,4 +108,13 @@ void icon_draw_archive(u32 px, u32 py, u32 size, gfx_color color);
 void icon_draw_music(u32 px, u32 py, u32 size, gfx_color color);
 
 
+/*
+    Logo officiel MikeaOS (voir icons.c pour le detail du
+    bitmap embarque). "size" est la largeur/hauteur en pixels du
+    carre dans lequel le logo est mis a l'echelle.
+*/
+
+void icon_draw_mikea_logo(u32 px, u32 py, u32 size, gfx_color color);
+
+
 #endif

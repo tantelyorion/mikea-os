@@ -158,8 +158,65 @@ void gfx_fill_rounded_rect_blend(u32 x, u32 y, u32 w, u32 h, u32 radius, gfx_col
 
 void gfx_fill_circle(u32 cx, u32 cy, u32 radius, gfx_color color);
 
+/*
+    Remplissage de triangle plein (voir implementation dans
+    graphics.c) -- coordonnees signees (s32) pour permettre des
+    sommets legerement hors-ecran (le clipping se fait en
+    interne). Utilise notamment par icon_draw_mikea_logo()
+    (gui/icons.c).
+*/
+void gfx_fill_triangle(s32 x0, s32 y0, s32 x1, s32 y1, s32 x2, s32 y2, gfx_color color);
+
+
+/*
+    Rectangle a coins arrondis avec bords LISSES (anti-aliasing 4x4
+    sur les coins). Avec w == h et radius == w/2 : un cercle lisse.
+    alpha_percent 0..100 (100 = opaque).
+*/
+
+void gfx_fill_rounded_rect_aa(u32 x, u32 y, u32 w, u32 h, u32 radius, gfx_color color, u32 alpha_percent);
+
+/*
+    Double buffering : le dessin va dans un tampon en RAM ; ces fonctions
+    l'envoient a l'ecran. Sans effet si le tampon n'est pas actif.
+
+      gfx_present()    : affiche les lignes modifiees. Une fois par image
+                         (fait par gui_draw_cursor()).
+      gfx_tick()       : filet de securite, appele par le timer (100 Hz).
+      gfx_set_direct() : affiche tout puis repasse en ecriture directe
+                         (panique du noyau, arret : le timer ne tournera plus).
+*/
+
+void gfx_present(void);
+
+void gfx_tick(void);
+
+void gfx_set_direct(void);
 
 u32 gfx_bpp();
+
+/*
+    Texte anti-aliase a largeur proportionnelle (police generee par
+    tools/gen_font.py). UTF-8 pris en charge (accents francais).
+    "y" = haut de la ligne de texte. Retourne la largeur dessinee.
+    gfx_draw_char()/gfx_draw_text() utilisent deja automatiquement
+    une police a chasse fixe lissee sur la grille de 16 px (scale 2).
+*/
+
+#define GFX_FONT_SMALL 0
+#define GFX_FONT_BODY  1
+#define GFX_FONT_TITLE 2
+
+u32 gfx_text_width(const char* text, int font);
+
+u32 gfx_font_height(int font);
+
+u32 gfx_draw_text_ui(u32 x, u32 y, const char* text, gfx_color color, int font);
+
+/* Centre verticalement (sur la hauteur des capitales) dans une zone de hauteur h. */
+
+u32 gfx_draw_text_ui_vcenter(u32 x, u32 top, u32 h, const char* text, gfx_color color, int font);
+
 
 
 #endif

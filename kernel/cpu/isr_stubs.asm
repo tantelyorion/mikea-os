@@ -170,6 +170,7 @@ isr_common_stub:
 
     mov rdi, [rsp + REGS_SIZE]      ; argument 1 = numero de vecteur
 
+    mov rsi, rsp                      ; argument 2 = pointeur vers le cadre sauvegarde
     call isr_handler
 
     pop r15

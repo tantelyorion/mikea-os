@@ -122,7 +122,8 @@ u32 ph = (u32)height * 8 * GFX_SCALE;
     d'ombre discret plutot qu'un cadre neon.
 */
 
-gfx_fill_rect_blend(px + 4, py + 4, pw, ph, theme_shadow(), 22);
+gfx_fill_rect_blend(px + 6, py + 8, pw, ph, theme_shadow(), 10);
+gfx_fill_rect_blend(px + 3, py + 4, pw, ph, theme_shadow(), 14);
 
 
 /*
@@ -243,15 +244,13 @@ if (title != (void*)0)
     fixe.
 */
 
-u32 title_len = 0;
+/* Police proportionnelle lissee : largeur reelle mesuree, plus d'estimation. */
 
-while (title[title_len] != 0) { title_len++; }
-
-u32 title_px_w = title_len * 8 * GFX_SCALE;
+u32 title_px_w = gfx_text_width(title, GFX_FONT_BODY);
 
 u32 title_x = (pw > title_px_w) ? px + (pw - title_px_w) / 2 : px + 8 * GFX_SCALE;
 
-gfx_draw_text(title_x, py + 2, title, theme_titlebar_text(), GFX_SCALE);
+gfx_draw_text_ui_vcenter(title_x, py, titlebar_h, title, theme_titlebar_text(), GFX_FONT_BODY);
 
 }
 
@@ -327,6 +326,32 @@ u32 max_cx = next_cx + dot_spacing;
 
 gfx_fill_circle(max_cx, dot_cy, dot_radius, theme_maximize_bg());
 
+/*
+    Correctif (bouton agrandir/restaurer sans retour visuel) :
+    le parametre is_maximized etait recu mais jamais lu -- le
+    point "agrandir" gardait exactement le meme aspect qu'une
+    fenetre soit maximisee ou non, aucun moyen pour l'utilisateur
+    de voir l'etat reel de la fenetre du premier coup d'oeil.
+    Toujours dans l'esprit "point plein sans glyphe" (voir plus
+    haut), on perce un petit carre au centre du point avec la
+    couleur de fond de la barre de titre quand la fenetre est
+    deja maximisee : le point plein reste "agrandir", le point
+    "troue" devient "restaurer".
+*/
+
+if (is_maximized)
+{
+
+u32 hole_size = dot_radius;
+
+u32 hole_x = max_cx - hole_size / 2;
+
+u32 hole_y = dot_cy - hole_size / 2;
+
+gfx_fill_rect(hole_x, hole_y, hole_size, hole_size, theme_titlebar_bg());
+
+}
+
 
 *max_bx = max_cx - dot_radius;
 
@@ -401,6 +426,24 @@ static int gui_cursor_is_saved = 0;
     laisser une "trace" du curseur visible.
 */
 
+/*
+    Point de synchronisation du double buffering : TOUTES les boucles
+    graphiques (bureau, fenetres d'applications) appellent cette fonction
+    une fois par image, apres avoir dessine leur contenu. On y envoie donc
+    le tampon vers l'ecran : l'image apparait d'un seul coup (pas de
+    scintillement), curseur compris.
+*/
+
+static void gui_draw_cursor_impl(s32 x, s32 y);
+
+void gui_draw_cursor(s32 x, s32 y)
+{
+    gui_draw_cursor_impl(x, y);
+
+    gfx_present();
+}
+
+
 void gui_cursor_erase()
 {
 
@@ -427,7 +470,7 @@ gui_cursor_is_saved = 0;
 }
 
 
-void gui_draw_cursor(s32 x, s32 y)
+static void gui_draw_cursor_impl(s32 x, s32 y)
 {
 
 if (!gfx_available())
@@ -443,6 +486,19 @@ if (x < 0 || y < 0)
 return;
 
 }
+
+/*
+    Correctif (scintillement du curseur) : la boucle du bureau
+    appelle cette fonction a chaque iteration. Effacer puis
+    redessiner le curseur a l'identique, des centaines de fois par
+    seconde, produisait un clignotement visible sous QEMU. Si le
+    curseur est deja affiche a cette position, il n'y a rien a faire.
+*/
+if (gui_cursor_is_saved && gui_cursor_saved_x == x && gui_cursor_saved_y == y)
+{
+    return;
+}
+
 
 
 /*
@@ -595,14 +651,12 @@ label_len++;
 }
 
 
-u32 text_w = (u32)label_len * 8 * GFX_SCALE;
+u32 text_w = gfx_text_width(label, GFX_FONT_BODY);
 
 u32 offset_x = (pw > text_w) ? (pw - text_w) / 2 : 0;
 
-u32 offset_y = (ph > 8 * GFX_SCALE) ? (ph - 8 * GFX_SCALE) / 2 : 0;
 
-
-gfx_draw_text(px + offset_x, py + offset_y, label, theme_text(), GFX_SCALE);
+gfx_draw_text_ui_vcenter(px + offset_x, py, ph, label, theme_text(), GFX_FONT_BODY);
 
 }
 
@@ -685,9 +739,7 @@ i++;
 display[i] = 0;
 
 
-u32 offset_y = (ph > 8 * GFX_SCALE) ? (ph - 8 * GFX_SCALE) / 2 : 0;
-
-gfx_draw_text(px + 6, py + offset_y, display, theme_text(), GFX_SCALE);
+gfx_draw_text_ui_vcenter(px + 8, py, ph, display, theme_text(), GFX_FONT_BODY);
 
 }
 

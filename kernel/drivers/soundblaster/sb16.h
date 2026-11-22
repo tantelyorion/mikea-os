@@ -39,7 +39,7 @@
     Limitation assumee du controleur DMA 8237 (8 bits, canaux 0-3) :
     le tampon transfere ne doit jamais chevaucher une frontiere de
     64 Ko en memoire physique. sb16_play_pcm() copie donc toujours
-    les donnees a jouer (sound_data.c, potentiellement n'importe ou
+    les donnees a jouer (assets/sounds, potentiellement n'importe ou
     dans le noyau/.rodata) vers un tampon interne dedie, aligne sur
     64 Ko (voir sb16.c) -- plutot que d'exiger cet alignement des
     donnees sources elles-memes.

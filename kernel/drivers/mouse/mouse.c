@@ -197,13 +197,29 @@ void console_write(const char* text);
 
 void mouse_init()
 {
+    /*
+        Correctif : position initiale au CENTRE de l'ecran (et non
+        dans le coin superieur gauche) et purge du tampon de sortie
+        du controleur PS/2 : des octets residuels (touches pressees
+        pendant le demarrage, reponses BIOS) etaient sinon pris pour
+        l'accuse de reception 0xFA et faisaient echouer l'init.
+    */
+    if (gfx_available())
+    {
+        mouse_x = (s32)(gfx_width() / 2);
+        mouse_y = (s32)(gfx_height() / 2);
+    }
+    else
+    {
+        mouse_x = 0;
+        mouse_y = 0;
+    }
+    packet_index = 0;
 
-
-mouse_x = 0;
-
-mouse_y = 0;
-
-packet_index = 0;
+    for (int flush = 0; flush < 64 && (inb(MOUSE_STATUS_PORT) & 0x01); flush++)
+    {
+        (void)inb(MOUSE_DATA_PORT);
+    }
 
 
 /* Active le second port PS/2 (souris). */

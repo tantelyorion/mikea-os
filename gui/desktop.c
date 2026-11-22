@@ -68,6 +68,8 @@ void cmd_valiha_app();
 
 void cmd_installer_app();
 
+void cmd_mikea_bar();
+
 
 void console_set_top_margin(int rows);
 
@@ -239,7 +241,7 @@ gfx_fill_rect_blend(0, 0, bar_w, bar_h, theme_titlebar_bg(), 95);
 
 gfx_draw_hline(0, bar_h - 1, bar_w, theme_border());
 
-gfx_draw_text(8 * GFX_SCALE, 2, title, theme_titlebar_text(), GFX_SCALE);
+gfx_draw_text_ui_vcenter(8 * GFX_SCALE, 0, bar_h, title, theme_titlebar_text(), GFX_FONT_BODY);
 
 
 /*
@@ -565,6 +567,30 @@ desktop_hitbox app_center_panel;
 #define MENUBAR_H (12 * GFX_SCALE)
 
 
+
+/*
+    Barre Mikea (agent IA, voir apps/mikea_bar) : ouverte par la touche
+    Espace sur le bureau ou par un clic sur "MikeaOS" dans la barre de
+    menu. Si elle est deja ouverte, on la ramene au premier plan.
+*/
+
+#define MIKEA_BAR_HOTSPOT_W 150
+
+static void desktop_open_mikea_bar(void)
+{
+    int existing = gui_window_find_by_entry(cmd_mikea_bar);
+
+    if (existing >= 0)
+    {
+        gui_window_focus(existing);
+    }
+    else
+    {
+        gui_window_open("Mikea", cmd_mikea_bar);
+    }
+}
+
+
 static void desktop_draw_menubar()
 {
 
@@ -577,10 +603,21 @@ gfx_fill_rect_blend(0, 0, screen_w, MENUBAR_H, theme_titlebar_bg(), 95);
 gfx_draw_hline(0, MENUBAR_H - 1, screen_w, theme_border());
 
 
-u32 text_y = (MENUBAR_H - 8 * GFX_SCALE) / 2;
 
 
-gfx_draw_text(8 * GFX_SCALE, text_y, "MikeaOS", theme_titlebar_text(), GFX_SCALE);
+/*
+    Correctif/ajout (identite visuelle) : petite marque du logo
+    officiel devant le nom, dans la barre du haut -- taille
+    contrainte a la hauteur de la barre (MENUBAR_H) moins une
+    petite marge.
+*/
+
+u32 menubar_logo_size = MENUBAR_H - 6;
+
+icon_draw_mikea_logo(6, (MENUBAR_H - menubar_logo_size) / 2, menubar_logo_size, theme_titlebar_text());
+
+
+gfx_draw_text_ui_vcenter(6 + menubar_logo_size + 8, 0, MENUBAR_H, "MikeaOS", theme_titlebar_text(), GFX_FONT_BODY);
 
 
 char clock_text[16];
@@ -588,16 +625,12 @@ char clock_text[16];
 format_walltime(clock_text);
 
 
-u32 clock_len = 0;
-
-while (clock_text[clock_len] != 0) { clock_len++; }
-
-u32 clock_px_w = clock_len * 8 * GFX_SCALE;
+u32 clock_px_w = gfx_text_width(clock_text, GFX_FONT_BODY);
 
 u32 clock_x = screen_w - clock_px_w - 8 * GFX_SCALE;
 
 
-gfx_draw_text(clock_x, text_y, clock_text, theme_titlebar_text(), GFX_SCALE);
+gfx_draw_text_ui_vcenter(clock_x, 0, MENUBAR_H, clock_text, theme_titlebar_text(), GFX_FONT_BODY);
 
 
 }
@@ -1018,18 +1051,14 @@ char label_buf[32];
 launchpad_truncate_label(APP_CENTER_ENTRIES[i].label, label_buf, sizeof(label_buf));
 
 
-u32 label_len = 0;
-
-while (label_buf[label_len] != 0) { label_len++; }
-
-u32 label_px_w = label_len * 8 * LAUNCHPAD_LABEL_SCALE;
+u32 label_px_w = gfx_text_width(label_buf, GFX_FONT_SMALL);
 
 u32 label_x = (LAUNCHPAD_CELL_W > label_px_w) ? cell_x + (LAUNCHPAD_CELL_W - label_px_w) / 2 : cell_x;
 
 u32 label_y = icon_y + LAUNCHPAD_ICON_SIZE + 4 * GFX_SCALE;
 
 
-gfx_draw_text(label_x, label_y, label_buf, launchpad_text, LAUNCHPAD_LABEL_SCALE);
+gfx_draw_text_ui(label_x, label_y, label_buf, launchpad_text, GFX_FONT_SMALL);
 
 
 state->app_center_entries[i].x = cell_x;
@@ -1270,10 +1299,12 @@ return;
 }
 
 
-const wallpaper_photo* photo = &WALLPAPER_PHOTOS[photo_index];
+/* Charge a la demande depuis le pack d'assets du disque (voir gui/assets). */
+
+const wallpaper_photo* photo = wallpaper_photo_get(photo_index);
 
 
-if (photo->width < 2 || photo->height < 2)
+if (photo == (const wallpaper_photo*)0 || photo->width < 2 || photo->height < 2)
 {
 
 return;
@@ -1620,6 +1651,14 @@ was_pressed = now_pressed;
 if (clicked)
 {
 
+/* Clic sur "MikeaOS" (a gauche de la barre de menu) : ouvre la barre Mikea. */
+
+if (!state.app_center_open && my >= 0 && (u32)my < MENUBAR_H && mx >= 0 && mx < MIKEA_BAR_HOTSPOT_W)
+{
+    desktop_open_mikea_bar();
+}
+
+
 
 if (state.app_center_open)
 {
@@ -1921,6 +1960,12 @@ gui_window_open("Terminal", cmd_terminal_app);
 was_pressed = 0;
 
 }
+else if (c == ' ')
+{
+    desktop_open_mikea_bar();
+    was_pressed = 0;
+}
+
 
 }
 
@@ -1930,7 +1975,7 @@ if (!state.app_center_open)
 
 unsigned long now = timer_ticks();
 
-if (now - last_clock_update >= 500)
+if (now - last_clock_update >= 100)
 {
 
 last_clock_update = now;
@@ -1967,6 +2012,8 @@ unsigned long frame_start = timer_ticks();
 
 while (timer_ticks() - frame_start < 1)
 {
+    /* Correctif : attente en veille (hlt) au lieu d'une boucle active a 100% CPU sous QEMU. */
+    asm volatile("hlt");
 }
 
 

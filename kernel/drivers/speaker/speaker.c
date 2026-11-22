@@ -4,6 +4,8 @@
 
 #include "../soundblaster/sb16.h"
 #include "../soundblaster/sound_data.h"
+#include "../../assets/assets.h"
+#include "../../memory/heap.h"
 
 
 void console_write(const char* text);
@@ -142,6 +144,30 @@ speaker_off();
 }
 
 
+/*
+    Lit le clip PCM depuis le pack d'assets du disque, le joue, puis le
+    libere (sb16_play_pcm() copie les donnees dans son propre tampon DMA,
+    donc la liberation immediate est sure). Renvoie 0 si le clip est
+    introuvable : l'appelant retombe alors sur les bips du haut-parleur.
+*/
+
+static int sound_play_clip(const char* asset_name)
+{
+    u32 length = 0;
+    u8* pcm = assets_load(asset_name, &length);
+
+    if (pcm == (u8*)0)
+    {
+        return 0;
+    }
+
+    sb16_play_pcm(pcm, length, SOUND_PCM_SAMPLE_RATE);
+    mk_free(pcm);
+
+    return 1;
+}
+
+
 void sound_play_startup()
 {
 
@@ -161,9 +187,12 @@ void sound_play_startup()
 if (sb16_available())
 {
 
-sb16_play_pcm(startup_pcm, startup_pcm_len, SOUND_PCM_SAMPLE_RATE);
+if (sound_play_clip("snd_startup"))
+{
 
 return;
+
+}
 
 }
 
@@ -187,9 +216,12 @@ void sound_play_shutdown()
 if (sb16_available())
 {
 
-sb16_play_pcm(shutdown_pcm, shutdown_pcm_len, SOUND_PCM_SAMPLE_RATE);
+if (sound_play_clip("snd_shutdown"))
+{
 
 return;
+
+}
 
 }
 

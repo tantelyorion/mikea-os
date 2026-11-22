@@ -200,7 +200,11 @@ return 0;
 }
 
 
-u64* sp = (u64*)(t->stack_base + THREAD_STACK_SIZE);
+u64* sp = (u64*)(((u64)(t->stack_base + THREAD_STACK_SIZE)) & ~(u64)0xF);
+
+/* Marge : apres le 'ret' vers thread_trampoline, rsp doit valoir 8 (mod 16), comme apres un 'call'. */
+sp -= 1;
+*sp = 0;
 
 
 /*
@@ -244,7 +248,7 @@ return running_thread;
 
 
 
-void thread_yield()
+static void thread_yield_locked()
 {
 
 
@@ -327,4 +331,29 @@ running_thread = next;
 context_switch(&previous->stack_pointer, next->stack_pointer);
 
 
+}
+
+
+/*
+    Correctif (blocages/affichage corrompu sous QEMU) : thread_yield()
+    est appele a la fois depuis le gestionnaire du minuteur (IRQ0,
+    interruptions deja masquees) ET depuis du code ordinaire
+    (scheduler_run, boucles du bureau) avec interruptions ACTIVES.
+    Dans ce second cas, un tic du minuteur survenant entre le choix du
+    prochain thread et context_switch() relancait thread_yield() au
+    milieu de la premiere, corrompant running_thread et les piles.
+    On masque donc les interruptions pendant toute la commutation et on
+    restaure ensuite l'etat d'origine du drapeau IF.
+*/
+void thread_yield()
+{
+    u64 flags;
+    asm volatile("pushfq; pop %0; cli" : "=r"(flags) : : "memory");
+
+    thread_yield_locked();
+
+    if (flags & 0x200)
+    {
+        asm volatile("sti" : : : "memory");
+    }
 }

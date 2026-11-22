@@ -10,7 +10,7 @@
     pour toute exception CPU (vecteurs 0-31).
 */
 
-void isr_handler(u64 vector);
+void isr_handler(u64 vector, u64* frame);
 
 
 /*

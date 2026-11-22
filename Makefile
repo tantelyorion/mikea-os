@@ -57,6 +57,34 @@ ASM = nasm
 # par souci de coherence/robustesse). OBJCOPY n'est pas une variable
 # implicite de Make : "OBJCOPY ?= objcopy" n'a jamais eu ce probleme.
 
+# Detection automatique : si "gcc" est absent (cas typique de Git Bash /
+# MINGW64 sous Windows) mais que clang + lld sont installes, on bascule
+# sur la chaine LLVM, qui sait produire de l'ELF pour le noyau.
+HAVE_GCC   := $(shell command -v gcc 2>/dev/null)
+HAVE_CLANG := $(shell command -v clang 2>/dev/null)
+USE_LLVM   :=
+ifeq ($(origin CC),default)
+ifeq ($(HAVE_GCC),)
+ifneq ($(HAVE_CLANG),)
+USE_LLVM := 1
+endif
+endif
+endif
+
+ifeq ($(USE_LLVM),1)
+CC := clang
+# On appelle le linker ELF de LLVM DIRECTEMENT (ld.lld). Passer par
+# "clang -fuse-ld=lld" sous MINGW64 echoue : clang relance gcc/collect2,
+# qui lance lld en mode COFF ("unknown argument: -T").
+# Sous MSYS2/MINGW64, "ld.lld" demarre lld en mode COFF ("unknown argument:
+# -T") : on force donc explicitement le mode ELF avec "lld -flavor gnu".
+ifneq ($(shell command -v lld 2>/dev/null),)
+LD := lld -flavor gnu
+else
+LD := ld.lld
+endif
+OBJCOPY ?= llvm-objcopy
+else
 ifeq ($(origin CC),default)
 CC := gcc
 endif
@@ -66,6 +94,7 @@ LD := ld
 endif
 
 OBJCOPY ?= objcopy
+endif
 
 
 # Correctif (compilation croisee sans outil dedie a installer) :
@@ -121,19 +150,54 @@ TARGET_FLAG ?=
 # ci-dessus : "pulseaudio" convient a la grande majorite des
 # distributions Linux de bureau actuelles (y compris via le module
 # de compatibilite PipeWire-Pulse, tres largement deploye par
-# defaut), "coreaudio" est le backend natif macOS, et "dsound"
-# (DirectSound) celui de Windows. QEMU_AUDIODEV reste personnalisable
-# (ex. "make run QEMU_AUDIODEV=alsa" sur un Linux sans PulseAudio/
-# PipeWire, ou "sdl"/"none" pour un test sans materiel audio du
-# tout) pour qui a besoin d'un backend different.
+# defaut), "coreaudio" est le backend natif macOS, et "wasapi"
+# le backend audio moderne de Windows.
+#
+# Correctif (son de demarrage muet sous Windows) : "dsound"
+# (DirectSound) etait utilise par defaut ici, mais s'est revele
+# silencieux/instable sur QEMU recent (>= 6.x) sur plusieurs
+# machines Windows testees, sans qu'aucune erreur ne soit
+# remontee -- le pire cas de figure decrit juste au-dessus.
+# "wasapi" (Windows Audio Session API), disponible depuis QEMU
+# 5.0, est le backend audio natif moderne de Windows et s'est
+# montre nettement plus fiable en pratique. QEMU_AUDIODEV reste
+# personnalisable (ex. "make run QEMU_AUDIODEV=dsound" pour
+# revenir a l'ancien comportement, "make run
+# QEMU_AUDIODEV=alsa" sur un Linux sans PulseAudio/PipeWire, ou
+# "sdl"/"none" pour un test sans materiel audio du tout).
 
 ifeq ($(origin QEMU_AUDIODEV),undefined)
 ifeq ($(OS),Windows_NT)
+# Correctif : beaucoup de builds QEMU pour Windows n'incluent PAS "wasapi"
+# (erreur : "Parameter 'driver' does not accept value 'wasapi'"). On
+# demande a QEMU ce qu'il sait faire : dsound, wasapi, sdl, sinon "none".
+QEMU_AUDIO_LIST_WIN := $(shell qemu-system-x86_64 -audiodev help 2>/dev/null)
+ifneq (,$(filter dsound,$(QEMU_AUDIO_LIST_WIN)))
 QEMU_AUDIODEV := dsound
+else ifneq (,$(filter wasapi,$(QEMU_AUDIO_LIST_WIN)))
+QEMU_AUDIODEV := wasapi
+else ifneq (,$(filter sdl,$(QEMU_AUDIO_LIST_WIN)))
+QEMU_AUDIODEV := sdl
+else
+QEMU_AUDIODEV := none
+endif
 else ifeq ($(shell uname -s 2>/dev/null),Darwin)
 QEMU_AUDIODEV := coreaudio
 else
+# Correctif (QEMU refuse de demarrer sur un Linux sans PulseAudio) :
+# "-audiodev pa" fait ECHOUER QEMU (et non pas tourner muet) si le
+# backend n'est pas disponible. On interroge donc QEMU lui-meme sur les
+# backends audio compiles, et on retombe sur "none" si aucun ne convient.
+QEMU_AUDIO_LIST := $(shell qemu-system-x86_64 -audiodev help 2>/dev/null)
+ifneq (,$(filter pa,$(QEMU_AUDIO_LIST)))
 QEMU_AUDIODEV := pa
+else ifneq (,$(filter alsa,$(QEMU_AUDIO_LIST)))
+QEMU_AUDIODEV := alsa
+else ifneq (,$(filter sdl,$(QEMU_AUDIO_LIST)))
+QEMU_AUDIODEV := sdl
+else
+QEMU_AUDIODEV := none
+endif
 endif
 endif
 
@@ -160,6 +224,7 @@ $(TARGET_FLAG) \
 -Wextra \
 -I. \
 -Iinclude \
+-MMD -MP \
 -c
 
 
@@ -177,6 +242,13 @@ LD_FLAGS = \
 BUILD = build
 
 OBJDIR = $(BUILD)/obj
+
+# Correctif : cree toujours les dossiers de build, meme pour 'make run'
+# (sinon nasm echoue : "unable to open output file build/boot.bin").
+$(shell mkdir -p $(BUILD) $(OBJDIR))
+
+# Carte reseau emulee par QEMU : e1000 (defaut) ou rtl8139  ->  make run QEMU_NIC=rtl8139
+QEMU_NIC ?= e1000
 
 
 BOOT = boot/bios
@@ -234,7 +306,7 @@ ISR_STUBS_OBJ = $(OBJDIR)/isr_stubs.o
 # utilisateur au format MKX, distincts du noyau (a
 # construire separement avec le futur outil mkx). sdk/ est
 # uniquement compose de headers (pas de .c a compiler).
-C_SOURCES = $(shell find kernel filesystem shell security packages mkx libc gui boot/installer apps -name "*.c" 2>/dev/null)
+C_SOURCES = $(shell find kernel filesystem shell security packages mkx libc gui net crypto boot/installer apps -name "*.c" 2>/dev/null)
 
 C_OBJECTS = $(patsubst %.c,$(OBJDIR)/%.o,$(C_SOURCES))
 
@@ -275,7 +347,7 @@ dirs:
 # ------------------------------------------------------------
 
 
-$(BOOT_BIN):
+$(BOOT_BIN): $(BOOT)/boot.asm
 
 	$(ASM) \
 	$(BOOT)/boot.asm \
@@ -289,7 +361,7 @@ $(BOOT_BIN):
 # ------------------------------------------------------------
 
 
-$(STAGE2_BIN):
+$(STAGE2_BIN): boot/loader/stage2.asm
 
 	$(ASM) \
 	boot/loader/stage2.asm \
@@ -388,6 +460,10 @@ $(KERNEL_BIN): $(KERNEL_ELF)
 	$(KERNEL_ELF) \
 	$(KERNEL_BIN)
 
+	@size=$$(wc -c < $(KERNEL_BIN)); \
+	if [ $$size -gt 512000 ]; then \
+	echo "ERREUR : kernel.bin ($$size octets) depasse les 1000 secteurs lus par stage2 (512000 octets)."; exit 1; fi
+
 
 
 # ------------------------------------------------------------
@@ -395,7 +471,7 @@ $(KERNEL_BIN): $(KERNEL_ELF)
 # ------------------------------------------------------------
 
 
-$(IMG): $(BOOT_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
+$(IMG): $(BOOT_BIN) $(STAGE2_BIN) $(KERNEL_BIN) $(wildcard assets/assets.pak)
 
 	cat \
 	$(BOOT_BIN) \
@@ -422,6 +498,19 @@ $(IMG): $(BOOT_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
 	# de quoi laisser une bonne marge de croissance au noyau).
 
 	truncate -s 1M $(IMG)
+
+	# Pack d'assets (fonds d'ecran, sons) : place juste apres la zone du
+	# noyau (secteurs 97 a 1096), au secteur 1100 -- voir
+	# kernel/assets/assets.h (ASSETS_PAK_LBA) et tools/pack_assets.py.
+	# Reste sous INSTALLER_SECTOR_COUNT (2048) : la commande "install" le
+	# copie donc avec le reste de l'image. S'il est absent, le systeme
+	# demarre quand meme (fonds en degrade, bips au lieu des sons).
+	@if [ -f assets/assets.pak ]; then \
+		dd if=assets/assets.pak of=$(IMG) bs=512 seek=1100 conv=notrunc 2>/dev/null \
+		&& echo "[assets] assets.pak ecrit au secteur 1100"; \
+	else \
+		echo "AVERTISSEMENT : assets/assets.pak absent (python3 tools/pack_assets.py) -- fonds photo et sons desactives"; \
+	fi
 
 
 
@@ -466,11 +555,32 @@ run: $(IMG) $(DISK_IMG)
 	# le haut-parleur interne a disparu).
 
 	qemu-system-x86_64 \
+	-m 256M \
+	-cpu max \
+	-vga std \
+	-nic user,model=$(QEMU_NIC) \
 	-drive format=raw,file=$(IMG) \
 	-drive format=raw,file=$(DISK_IMG) \
 	-audiodev $(QEMU_AUDIODEV),id=snd0 \
 	-machine pcspk-audiodev=snd0 \
 	-device sb16,audiodev=snd0
+
+# JARVIS (IA locale) : meme machine + COM1 expose sur TCP 127.0.0.1:4555.
+# Lancer d'abord :  python3 tools/jarvis_bridge.py
+run-ai: $(IMG) $(DISK_IMG)
+
+	qemu-system-x86_64 \
+	-m 256M \
+	-cpu max \
+	-vga std \
+	-nic user,model=$(QEMU_NIC) \
+	-drive format=raw,file=$(IMG) \
+	-drive format=raw,file=$(DISK_IMG) \
+	-audiodev $(QEMU_AUDIODEV),id=snd0 \
+	-machine pcspk-audiodev=snd0 \
+	-device sb16,audiodev=snd0 \
+	-serial tcp:127.0.0.1:4555,server,nowait
+
 
 
 
@@ -485,4 +595,6 @@ clean:
 
 
 
-.PHONY: all clean run dirs
+-include $(C_OBJECTS:.o=.d)
+
+.PHONY: all clean run run-ai dirs

@@ -2,6 +2,8 @@
 
 #include "gui.h"
 
+#include "icons.h"
+
 #include "theme.h"
 
 #include "../kernel/drivers/graphics/graphics.h"
@@ -156,9 +158,20 @@ gfx_fill_rect_blend(ppx, ppy, ppw, pph, theme_panel(), theme_panel_opacity());
 gfx_draw_rect(ppx, ppy, ppw, pph, theme_border());
 
 
-gfx_draw_text(ppx + 16, ppy + 16, "Mikea OS", theme_text(), 2);
+/*
+    Correctif/ajout (identite visuelle) : le panneau de
+    connexion n'affichait que le nom "Mikea OS" en texte -- on
+    place desormais le logo officiel juste devant, aligne
+    verticalement sur la ligne de titre.
+*/
 
-gfx_draw_text(ppx + 16, ppy + 44, "Connexion", theme_text(), 1);
+u32 login_logo_size = 24;
+
+icon_draw_mikea_logo(ppx + 16, ppy + 14, login_logo_size, theme_text());
+
+gfx_draw_text_ui_vcenter(ppx + 16 + login_logo_size + 10, ppy + 14, login_logo_size, "Mikea OS", theme_text(), GFX_FONT_TITLE);
+
+gfx_draw_text_ui(ppx + 16, ppy + 44, "Connexion", theme_text(), GFX_FONT_SMALL);
 
 
 gui_draw_text(panel_x + 2, panel_y + 4, "Utilisateur", theme_text_attr());
@@ -192,7 +205,7 @@ u32 err_px = (u32)(panel_x + 2) * 8 * GFX_SCALE;
 
 u32 err_py = (u32)(panel_y + 12) * 8 * GFX_SCALE;
 
-gfx_draw_text(err_px, err_py, error_message, theme_close_bg(), 1);
+gfx_draw_text_ui(err_px, err_py, error_message, theme_close_bg(), GFX_FONT_SMALL);
 
 }
 
@@ -201,7 +214,7 @@ u32 hint_px = (u32)(panel_x + 2) * 8 * GFX_SCALE;
 
 u32 hint_py = (u32)(panel_y + panel_h - 1) * 8 * GFX_SCALE;
 
-gfx_draw_text(hint_px, hint_py, "Par defaut : root / mikea", theme_border(), 1);
+gfx_draw_text_ui(hint_px, hint_py, "Par défaut : root / mikea", theme_border(), GFX_FONT_SMALL);
 
 
 redraw = 0;

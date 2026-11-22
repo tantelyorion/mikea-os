@@ -18,9 +18,9 @@ check() {
 }
 
 check nasm                  "assembleur, requis pour le bootloader et l'entree noyau"
-check x86_64-elf-gcc        "compilateur croise C, requis pour le noyau"
-check x86_64-elf-ld         "editeur de liens croise, requis pour l'ELF final"
-check x86_64-elf-objcopy    "conversion ELF -> binaire brut"
+check gcc                   "compilateur C (ou x86_64-elf-gcc / clang via CC=...)"
+check ld                    "editeur de liens (ou x86_64-elf-ld via LD=...)"
+check objcopy               "conversion ELF -> binaire brut"
 check qemu-system-x86_64    "emulateur, requis pour 'make run'"
 
 if [ "$MISSING" -eq 1 ]; then

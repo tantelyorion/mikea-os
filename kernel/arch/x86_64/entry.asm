@@ -18,6 +18,8 @@
 
 
 global _start
+extern __bss_start
+extern __bss_end
 
 
 extern kernel_start
@@ -35,9 +37,22 @@ section .text
 
 _start:
 
-
     cli
 
+    ; Correctif (affichage/execution sous QEMU) : kernel.bin est
+    ; produit par "objcopy -O binary", qui N'INCLUT PAS la section
+    ; .bss (NOBITS). Rien n'initialisait donc a zero les variables
+    ; statiques non initialisees (curseur, drapeaux, etats des
+    ; pilotes...) : elles contenaient ce que la RAM contenait deja
+    ; a cet endroit. On efface le BSS ici, AVANT de configurer la
+    ; pile (qui est elle-meme dans le BSS).
+
+    lea rdi,[rel __bss_start]
+    lea rcx,[rel __bss_end]
+    sub rcx,rdi
+    xor eax,eax
+    cld
+    rep stosb
 
     ; --------------------------------------------------------
     ; Initialisation des segments
@@ -57,7 +72,7 @@ _start:
     ; --------------------------------------------------------
 
 
-    lea rsp,[stack_top]
+    lea rsp,[rel stack_top]
 
 
     ; Alignement 16 bytes obligatoire ABI x86_64

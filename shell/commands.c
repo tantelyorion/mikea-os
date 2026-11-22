@@ -1471,6 +1471,8 @@ console_write(" file(s) permanently deleted)\n");
 
 
 
+int mikea_extra_command(char* line);
+
 void execute_command(
     char* command
 )
@@ -1516,8 +1518,14 @@ console_write("settings\n");
 console_write("run <name>\n");
 console_write("reboot\n");
 console_write("shutdown\n");
-
-
+console_write("-- Reseau / securite / IA --\n");
+console_write("netinfo | ping <ip> | arp [flush]\n");
+console_write("firewall [stealth on|off] | seclog\n");
+console_write("lspci | radio (wifi, bluetooth, gps)\n");
+console_write("dhcp | nslookup <nom> | http <hote> [/chemin]\n");
+console_write("https <hote> [/chemin] [pin=<empreinte>]\n");
+console_write("selftest (tests crypto) | sha256 <texte>\n");
+console_write("jarvis <phrase> | jarvis ask <question>\n");
 }
 
 
@@ -1854,14 +1862,13 @@ else if(command[0] == 0)
 }
 
 
+else if (mikea_extra_command(command))
+{
+/* Commandes reseau / materiel / securite / JARVIS (net/net_shell.c). */
+}
 else
 {
-
 sound_play_error();
-
 console_write("Command not found\n");
-
 }
-
-
 }

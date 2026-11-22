@@ -109,7 +109,10 @@ out 0x92,al
 ; le depasser, ce qui evite tout probleme de franchissement
 ; de limite de segment).
 
-mov cx,9
+; Correctif : 10 blocs de 100 secteurs = 1000 secteurs (500 Ko) au lieu de 900,
+; pour laisser de la place a la pile reseau, a la crypto et a l'IA.
+; Le tampon 0x20000-0x9D000 reste sous la zone BIOS (0x9FC00).
+mov cx,10
 
 .read_kernel_chunk:
 
@@ -624,7 +627,7 @@ dw 0x0000
 
 dap_kernel_seg:
 
-dw 0x1000
+dw 0x2000
 
 dap_kernel_lba:
 
@@ -677,11 +680,11 @@ call print_vga32
 ; plus besoin des approximations segment:offset du mode reel
 ; 16 bits pour atteindre une adresse au-dela de 1 Mo.
 
-mov esi,0x10000
+mov esi,0x20000
 
 mov edi,0x100000
 
-mov ecx,(900*512)/4
+mov ecx,(1000*512)/4
 
 cld
 

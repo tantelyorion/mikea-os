@@ -50,7 +50,7 @@ static int g_sb16_present = 0;
     Tampon de lecture DMA dedie : le controleur 8237 (canaux 8
     bits) ne peut pas transferer un bloc qui chevauche une
     frontiere de 64 Ko en memoire physique. Plutot que d'exiger cet
-    alignement des donnees sources embarquees (sound_data.c,
+    alignement des donnees sources embarquees (assets/sounds,
     placees par le linker sans contrainte particuliere), on copie
     toujours vers ce tampon interne, aligne sur 64 Ko et strictement
     plus petit qu'une page de 64 Ko : n'importe quelle donnee qui y
@@ -64,7 +64,24 @@ static int g_sb16_present = 0;
 
 #define DMA_BUFFER_SIZE 65536
 
-static u8 dma_buffer[DMA_BUFFER_SIZE] __attribute__((aligned(65536)));
+/*
+    Correctif (pas de son de demarrage) : le controleur DMA 8237 ne peut
+    JAMAIS franchir une frontiere de 64 Ko (son compteur d'adresse est sur
+    16 bits). L'ancien code comptait sur "aligned(65536)", mais l'alignement
+    reel dependait de l'edition de liens (lld ne l'honorait pas toujours :
+    avertissement ".bss ... not a multiple of alignment"). Le tampon
+    traversait alors une frontiere : son tronque/silencieux.
+    On reserve donc 128 Ko et on calcule a l'execution un bloc de 64 Ko
+    ALIGNE sur 64 Ko a l'interieur, quelle que soit l'edition de liens.
+*/
+static u8 dma_raw[DMA_BUFFER_SIZE * 2];
+
+static u8* dma_buffer_aligned()
+{
+    u64 address = (u64)dma_raw;
+    address = (address + 0xFFFFULL) & ~0xFFFFULL;
+    return (u8*)address;
+}
 
 
 static void dsp_write(u8 value)
@@ -162,6 +179,13 @@ return 0;
 
 }
 
+
+/* Volumes du mixeur au maximum (maitre G/D, voix G/D) + accuse IRQ residuel. */
+outb(SB_BASE + 0x4, 0x30); outb(SB_BASE + 0x5, 0xF8);
+outb(SB_BASE + 0x4, 0x31); outb(SB_BASE + 0x5, 0xF8);
+outb(SB_BASE + 0x4, 0x32); outb(SB_BASE + 0x5, 0xF8);
+outb(SB_BASE + 0x4, 0x33); outb(SB_BASE + 0x5, 0xF8);
+(void)inb(SB_BASE + 0xE);
 
 console_write("Sound Blaster 16 detectee (DSP pret).\n");
 
@@ -269,8 +293,10 @@ return;
 /*
     Copie vers le tampon dedie aligne sur 64 Ko (voir le
     commentaire de dma_buffer plus haut) -- les donnees sources
-    (sound_data.c) n'ont elles-memes aucune garantie d'alignement.
+    (assets/sounds) n'ont elles-memes aucune garantie d'alignement.
 */
+
+u8* dma_buffer = dma_buffer_aligned();
 
 mk_memcpy(dma_buffer, data, length);
 
@@ -295,7 +321,7 @@ dsp_write((u8)(sample_rate_hz & 0xFF));
 /*
     Lecture DMA 8 bits, cycle unique : commande 0xC0, puis un
     octet de mode (0x00 = mono, non signe -- format de
-    sound_data.c), puis la longueur moins un sur deux octets
+    assets/sounds), puis la longueur moins un sur deux octets
     (poids faible puis poids fort).
 */
 
@@ -332,11 +358,18 @@ ticks_needed = 1;
 
 unsigned long start = timer_ticks();
 
-while (timer_ticks() - start < ticks_needed)
-{
+/* Garde-fou : si le minuteur n'avance pas, on ne bloque jamais le noyau. */
+u64 spins = 0;
+u64 spin_limit = (u64)ticks_needed * 400000ULL + 1000ULL;
 
+while (timer_ticks() - start < ticks_needed && spins < spin_limit)
+{
+    spins++;
+    asm volatile("pause");
 }
 
+/* Accuse de reception de l'IRQ de fin de transfert (sinon un prochain son peut etre bloque). */
+(void)inb(SB_BASE + 0xE);
 
 dsp_write(0xD3);
 

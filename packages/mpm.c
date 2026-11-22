@@ -87,7 +87,7 @@ database_init();
 
 
 void mpm_install(
-char* package
+char* package_name
 )
 {
 
@@ -111,7 +111,7 @@ console_write(
 
 
 package_create(
-package,
+package_name,
 "1.0"
 );
 
@@ -130,7 +130,7 @@ console_write(
 
 
 void mpm_remove(
-char* package
+char* package_name
 )
 {
 
@@ -159,7 +159,7 @@ console_write(
     correctif (ni package_find/package_count/package_get).
 */
 
-if(package_delete(package))
+if(package_delete(package_name))
 {
 
 console_write(

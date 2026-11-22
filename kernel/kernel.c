@@ -118,6 +118,8 @@ void mouse_init();
 
 
 void pci_init();
+void net_init();
+void serial_init();
 
 
 
@@ -349,6 +351,10 @@ mouse_init();
 
 
 pci_init();
+
+serial_init();
+
+net_init();
 
 
 /*

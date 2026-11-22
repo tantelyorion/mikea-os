@@ -65,4 +65,8 @@ INSTALL_ERROR_VERIFY = 3
 install_result installer_run(void (*progress_callback)(u32 sector, u32 total), u32* failed_sector_out);
 
 
+/* Lit un secteur (512 octets) du disque de demarrage. 0 = succes. */
+
+int installer_read_boot_sector(u32 lba, u8* buffer);
+
 #endif

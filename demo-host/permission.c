@@ -39,12 +39,12 @@ permission_table[1] = PERMISSION_READ | PERMISSION_WRITE | PERMISSION_EXEC;
 
 
 int check_permission(
-int user,
+int user_id,
 int permission
 )
 {
 
-if (user <= 0 || user > MAX_USERS)
+if (user_id <= 0 || user_id > MAX_USERS)
 {
 
 return 0;
@@ -52,19 +52,19 @@ return 0;
 }
 
 
-return (permission_table[user] & permission) == permission;
+return (permission_table[user_id] & permission) == permission;
 
 }
 
 
 
 void permission_grant(
-int user,
+int user_id,
 int permission
 )
 {
 
-if (user <= 0 || user > MAX_USERS)
+if (user_id <= 0 || user_id > MAX_USERS)
 {
 
 return;
@@ -72,6 +72,6 @@ return;
 }
 
 
-permission_table[user] |= permission;
+permission_table[user_id] |= permission;
 
 }

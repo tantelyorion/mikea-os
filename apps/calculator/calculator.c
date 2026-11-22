@@ -467,6 +467,28 @@ just_computed = 1;
 else
 {
 
+/*
+    Correctif (operations enchainees fausses, ex. "5 + 3 + 2 =") :
+    ce code se contentait jusqu'ici d'ecraser pending_value par
+    current_value des qu'un nouvel operateur etait presse, sans
+    jamais evaluer l'operation en attente -- "5 + 3 +" perdait
+    silencieusement le "5 + 3" (pending_value devenait 3 au lieu
+    de 8), et "5 + 3 + 2 =" donnait 5 au lieu de 10. Comme sur
+    n'importe quelle calculatrice simple, un operateur presse
+    alors qu'une operation est deja en attente doit d'abord etre
+    evalue.
+*/
+
+if (pending_op != 0)
+{
+
+if (pending_op == '+') { current_value = pending_value + current_value; }
+else if (pending_op == '-') { current_value = pending_value - current_value; }
+else if (pending_op == '*') { current_value = pending_value * current_value; }
+else if (pending_op == '/') { current_value = (current_value != 0) ? pending_value / current_value : 0; }
+
+}
+
 /* Operateur : + - * / */
 
 pending_value = current_value;

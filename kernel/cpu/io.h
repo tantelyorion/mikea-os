@@ -61,6 +61,19 @@ return value;
     standard).
 */
 
+
+static inline void outl(u16 port, u32 value)
+{
+    asm volatile("outl %0, %1" : : "a"(value), "Nd"(port));
+}
+
+static inline u32 inl(u16 port)
+{
+    u32 value;
+    asm volatile("inl %1, %0" : "=a"(value) : "Nd"(port));
+    return value;
+}
+
 static inline void io_wait(void)
 {
 
